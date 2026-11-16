@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Ship `nut doctor` with a 40-check registry, JSON, `--strict`/`--observe`/`--list`,
+  positional ID and section filters, generated `docs/doctor-checks.md`, and a
+  `POWEROFF_WAIT` warning against full-charge runtime plus 10 minutes.
+- Extend `Host` with metadata, current executable, and recorded sleep; extend the
+  upsd client with greeting/version, `LIST CMD`, and `LIST CLIENT`.
+
 - Ship `nut events` with bounded journal JSON reads, outage/blip/shutdown and
   communication stories, legacy hook continuity, raw/filter/follow modes, and
   explicit journal-access guidance.

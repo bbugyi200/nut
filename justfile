@@ -95,6 +95,10 @@ install-smoke:
 snap:
     cargo insta review
 
+# Generate docs/doctor-checks.md from the doctor registry.
+docs-gen:
+    cargo test --locked --offline --lib -- doctor::tests::write_doctor_checks_markdown --exact --ignored --nocapture
+
 # Run the canonical offline formatting, lint, test, and hook shellcheck gate.
 check: fmt lint test hook-shellcheck
 

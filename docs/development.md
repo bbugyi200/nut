@@ -18,8 +18,10 @@ to enforce this project's `clippy.toml`.
 - `just run *args` runs the crate's `nut` binary.
 - `just remote host *args` copies a release binary to `HOST` over SSH and runs a
   read-only command (`bios`, `bios guide`, `bios profile`, `config path/show/diff`,
-  `status`, and the other allowlisted verbs). It refuses `config new/render`,
+  `status`, `doctor`, and the other allowlisted verbs). It refuses `config new/render`,
   `bios setup`, `bios attest`, drills, and other write/power actions.
+- `just docs-gen` regenerates `docs/doctor-checks.md` from the doctor registry.
+  A drift test fails when the committed file does not match.
 - `just hook-shellcheck` runs ShellCheck on the golden `nut-upssched-cmd` when the tool is installed.
 - `just snap` reviews insta snapshots of rendered NUT files.
 

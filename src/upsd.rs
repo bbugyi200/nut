@@ -136,6 +136,7 @@ pub struct UpsdClient {
     response_bytes: usize,
     response_lines: usize,
     greeting_seen: bool,
+    greeting: Option<String>,
 }
 
 impl UpsdClient {
@@ -186,11 +187,16 @@ impl UpsdClient {
             response_bytes: 0,
             response_lines: 0,
             greeting_seen: false,
+            greeting: None,
         })
     }
 
+    pub fn greeting(&self) -> Option<&str> {
+        self.greeting.as_deref()
+    }
+
     /// Read all variables in one bounded request. This client never sends write commands.
-    pub fn list_vars(mut self) -> Result<BTreeMap<String, String>, UpsdError> {
+    pub fn list_vars(&mut self) -> Result<BTreeMap<String, String>, UpsdError> {
         self.write_command(&format!("LIST VAR {}", self.ups))?;
         let expected_begin = format!("BEGIN LIST VAR {}", self.ups);
         let expected_end = format!("END LIST VAR {}", self.ups);
@@ -234,6 +240,62 @@ impl UpsdClient {
         }
     }
 
+    /// Query the daemon version. Call after another command so a connect
+    /// banner is not mistaken for this reply on servers that omit the banner.
+    pub fn version(&mut self) -> Result<String, UpsdError> {
+        self.write_command("VER")?;
+        let line = self.read_response_line()?;
+        if let Some(error) = parse_server_error(&line) {
+            return Err(error);
+        }
+        Ok(line)
+    }
+
+    pub fn list_cmds(&mut self) -> Result<Vec<String>, UpsdError> {
+        self.list_prefixed("CMD", |line| parse_token_row("CMD", line))
+    }
+
+    pub fn list_clients(&mut self) -> Result<Vec<String>, UpsdError> {
+        self.list_prefixed("CLIENT", |line| parse_token_row("CLIENT", line))
+    }
+
+    fn list_prefixed(
+        &mut self,
+        kind: &str,
+        parse_row: fn(&str) -> Result<(String, String), UpsdError>,
+    ) -> Result<Vec<String>, UpsdError> {
+        self.write_command(&format!("LIST {kind} {}", self.ups))?;
+        let expected_begin = format!("BEGIN LIST {kind} {}", self.ups);
+        let expected_end = format!("END LIST {kind} {}", self.ups);
+        let first = self.read_response_line()?;
+        if let Some(error) = parse_server_error(&first) {
+            return Err(error);
+        }
+        if first != expected_begin {
+            return Err(UpsdError::Protocol(format!(
+                "expected {expected_begin:?}, received {first:?}"
+            )));
+        }
+        let mut rows = Vec::new();
+        loop {
+            let line = self.read_response_line()?;
+            if line == expected_end {
+                return Ok(rows);
+            }
+            if let Some(error) = parse_server_error(&line) {
+                return Err(error);
+            }
+            let (ups, value) = parse_row(&line)?;
+            if !ups.eq_ignore_ascii_case(&self.ups) {
+                return Err(UpsdError::Protocol(format!(
+                    "response UPS name {ups:?} does not match {:?}",
+                    self.ups
+                )));
+            }
+            rows.push(value);
+        }
+    }
+
     fn write_command(&mut self, command: &str) -> Result<(), UpsdError> {
         if command.len() > 256 || command.contains(['\n', '\r']) {
             return Err(UpsdError::Protocol(
@@ -264,6 +326,7 @@ impl UpsdClient {
             if !self.greeting_seen {
                 self.greeting_seen = true;
                 if line.starts_with("Network UPS Tools upsd ") {
+                    self.greeting = Some(line);
                     continue;
                 }
             }
@@ -371,6 +434,22 @@ fn parse_server_error(line: &str) -> Option<UpsdError> {
         code: code.to_owned(),
         message: message.to_owned(),
     })
+}
+
+fn parse_token_row(kind: &str, line: &str) -> Result<(String, String), UpsdError> {
+    let mut fields = line.splitn(3, ' ');
+    if fields.next() != Some(kind) {
+        return Err(UpsdError::Protocol(format!(
+            "expected a {kind} response, received {line:?}"
+        )));
+    }
+    let ups = fields
+        .next()
+        .ok_or_else(|| UpsdError::Protocol(format!("malformed {kind} response: {line:?}")))?;
+    let value = fields
+        .next()
+        .ok_or_else(|| UpsdError::Protocol(format!("malformed {kind} response: {line:?}")))?;
+    Ok((ups.to_owned(), value.to_owned()))
 }
 
 fn parse_var_response(line: &str) -> Result<(String, String, String), UpsdError> {
@@ -498,7 +577,7 @@ mod tests {
         let vars = UpsdClient::connect("127.0.0.1", port, "cp1500")
             .unwrap()
             .list_vars()
-            .unwrap();
+            .expect("LIST VAR");
         worker.join().unwrap();
         assert_eq!(vars["ups.status"], "OL CHRG");
         assert_eq!(vars["battery.runtime"], "1550");

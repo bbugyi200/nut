@@ -4,6 +4,7 @@ pub mod bios;
 pub mod cli;
 pub mod completion;
 pub mod config;
+pub mod doctor;
 pub mod duration;
 pub mod error;
 pub mod events;
@@ -76,7 +77,7 @@ where
     };
 
     match execute(cli, host, stdout) {
-        Ok(()) => 0,
+        Ok(code) => code,
         Err(error) => {
             let _ = writeln!(stderr, "nut: {error}");
             if let Some(hint) = error.hint() {
@@ -112,23 +113,27 @@ fn is_root_help(args: &[OsString]) -> bool {
     help_requested
 }
 
-fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), NutError> {
+fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32, NutError> {
     match cli.command.unwrap_or(Command::Status(Default::default())) {
         Command::Config(args) => {
-            config::run(args.action, cli.config.as_deref(), cli.json, host, stdout)
+            config::run(args.action, cli.config.as_deref(), cli.json, host, stdout)?;
+            Ok(0)
         }
-        Command::Bios(args) => bios::run(
-            bios::BiosRun {
-                action: args.action,
-                json: cli.json,
-                ascii: cli.ascii,
-                color: cli.color,
-                verbose: cli.verbose,
-                config: cli.config.as_deref(),
-            },
-            host,
-            stdout,
-        ),
+        Command::Bios(args) => {
+            bios::run(
+                bios::BiosRun {
+                    action: args.action,
+                    json: cli.json,
+                    ascii: cli.ascii,
+                    color: cli.color,
+                    verbose: cli.verbose,
+                    config: cli.config.as_deref(),
+                },
+                host,
+                stdout,
+            )?;
+            Ok(0)
+        }
         Command::Status(args) => {
             let _ = bios::write_pending_reminder(host, cli.ascii, stdout)?;
             status::run_status(
@@ -142,29 +147,50 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
                 },
                 host,
                 stdout,
-            )
+            )?;
+            Ok(0)
         }
-        Command::Battery(args) => status::run_battery(
+        Command::Battery(args) => {
+            status::run_battery(
+                args,
+                status::OutputOptions {
+                    config_path: cli.config.as_deref(),
+                    json: cli.json,
+                    verbose: cli.verbose,
+                    color: cli.color,
+                    ascii: cli.ascii,
+                },
+                host,
+                stdout,
+            )?;
+            Ok(0)
+        }
+        Command::Completion(args) => {
+            completion::run(args.action, cli.json, host, stdout)?;
+            Ok(0)
+        }
+        Command::Events(args) => {
+            events::run(
+                args,
+                status::OutputOptions {
+                    config_path: cli.config.as_deref(),
+                    json: cli.json,
+                    verbose: cli.verbose,
+                    color: cli.color,
+                    ascii: cli.ascii,
+                },
+                host,
+                stdout,
+            )?;
+            Ok(0)
+        }
+        Command::Doctor(args) => doctor::run(
             args,
-            status::OutputOptions {
+            doctor::DoctorOptions {
                 config_path: cli.config.as_deref(),
                 json: cli.json,
-                verbose: cli.verbose,
-                color: cli.color,
                 ascii: cli.ascii,
-            },
-            host,
-            stdout,
-        ),
-        Command::Completion(args) => completion::run(args.action, cli.json, host, stdout),
-        Command::Events(args) => events::run(
-            args,
-            status::OutputOptions {
-                config_path: cli.config.as_deref(),
-                json: cli.json,
-                verbose: cli.verbose,
                 color: cli.color,
-                ascii: cli.ascii,
             },
             host,
             stdout,
@@ -174,7 +200,6 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
         | Command::Notify(_)
         | Command::Init(_)
         | Command::Rollback(_)
-        | Command::Doctor(_)
         | Command::Drill(_) => Err(NutError::operational(
             "this command is provided by a later nut phase",
         )),

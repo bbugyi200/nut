@@ -59,7 +59,7 @@ impl<H: Host> Provider for LiveProviders<'_, H> {
                         .collect()
                 })
                 .unwrap_or_default(),
-            // Later phases can extend this match with doctor IDs and drill records.
+            (["doctor"], "checks") => crate::doctor::catalog_ids(),
             (["rollback"], "stamp") => self
                 .0
                 .list_dir(std::path::Path::new("/var/backups/nut-cli"))

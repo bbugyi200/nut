@@ -1,0 +1,103 @@
+---
+source: src/doctor/mod.rs
+expression: output
+---
+ nut doctor | athena | 2025-11-16 20:03
+ This tool
+   ok tool.config            parsed /config.toml as schema 1
+   !! tool.binary            running unpackaged
+                             /home/bryan/nut (0.1.0)
+                          -> sudo install -o root -g root -m
+                             0755 target/release/nut
+                             /usr/local/bin/nut
+   !! tool.completion        completion is not installed
+                          -> nut completion install
+ Hardware
+   ok hw.usb                 one 0764:0601, device node
+                             /dev/bus/usb/001/004 group nut
+   xx hw.data                cannot connect to upsd at
+                             127.0.0.1:1: Connection refused
+                             (os error 111)
+                          -> check nut-server and the driver
+   xx hw.online              ups.status is unavailable
+                          -> check nut-server; then: nut
+                             doctor
+   -- hw.delays              ups.delay.shutdown is
+                             unavailable
+   xx hw.shutdown-return     cannot connect to upsd at
+                             127.0.0.1:1: Connection refused
+                             (os error 111)
+                          -> check nut-server; then: nut
+                             doctor
+   -- hw.rb                  ups.status is unavailable
+   !! hw.charge              battery charge is unavailable
+                          -> check the driver; then: nut
+                             doctor
+   ok hw.battery-age         battery installed 2026-04-01
+   !! hw.self-test           no self-test result is
+                             published
+                          -> nut battery test
+ Services
+   ok svc.driver             nut-driver@cp1500.service
+                             active
+   ok svc.server             nut-server.service active
+   ok svc.monitor            nut-monitor.service active
+   ok svc.enabled            driver, server, monitor, and
+                             nut.target are enabled
+   -- svc.restarts           pass -o/--observe SECS to watch
+                             driver NRestarts
+                          -> nut doctor --observe 30
+   ok svc.listen             port 3493 listens on 127.0.0.1
+   xx svc.client             cannot connect to upsd at
+                             127.0.0.1:1: Connection refused
+                             (os error 111)
+                          -> check nut-monitor; then: nut
+                             doctor
+   -- svc.version            upsd did not publish a version
+ Protection
+   !! protect.runtime        battery charge/runtime
+                             measurements are unavailable
+                          -> check the driver; then: nut
+                             doctor
+   -- protect.poweroff-wait  battery.runtime is unavailable
+   !! protect.hook           legacy hook
+                             /usr/local/sbin/athena-upssched
+                             -cmd is still in place
+                          -> sudo nut init
+   ok protect.mail           /usr/sbin/sendmail exists
+   ok protect.pwrstatd       pwrstatd is not running
+   ok protect.killpower      /etc/killpower is absent
+ Root-only
+   -- root.drift             root-only
+                          -> sudo nut doctor
+   -- root.credentials       root-only
+                          -> sudo nut doctor
+   -- root.placeholders      root-only
+                          -> sudo nut doctor
+   -- root.instcmds          root-only
+                          -> sudo nut doctor
+   -- root.perms             root-only
+                          -> sudo nut doctor
+ Boot & BIOS
+   ok boot.efi-order         Boot0002* debian is first
+   ok boot.nofail            2 listed mount(s) carry nofail
+   ok boot.fstab             findmnt --verify passed
+   ok boot.journal           /var/log/journal is present
+   !! boot.panic             kernel.panic=0; a hang will not
+                             reboot
+                          -> set kernel.panic=10, for
+                             example via /etc/sysctl.d
+   !! boot.watchdog          no hardware watchdog is active
+                          -> enable RuntimeWatchdogSec=60 if
+                             the board has a watchdog
+   ok bios.profile           asus-prime-trx40-pro matches
+                             ASUSTeK COMPUTER INC. PRIME
+                             TRX40-PRO
+   !! bios.attest            BIOS settings are not attested
+                          -> nut bios guide, then: sudo nut
+                             bios attest
+ Proof
+   -- proof.outage           never drilled
+                          -> sudo nut drill outage
+ 16 passed | 9 warnings | 4 failed | 4 unknown | 7 skipped
+ (root-only: sudo nut doctor)

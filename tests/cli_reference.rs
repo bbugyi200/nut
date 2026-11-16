@@ -78,3 +78,13 @@ fn events_help_matches_reference() {
         include_str!("reference/events-help.txt")
     );
 }
+
+#[test]
+fn doctor_help_matches_reference() {
+    let output = nut(&["doctor", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/doctor-help.txt")
+    );
+}

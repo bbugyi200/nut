@@ -66,6 +66,11 @@ fn protocol_tree_groups_flags_values_and_paths() {
     assert!(complete(&["nut", "bios", "profile", "show", ""]).contains("asus-prime-trx40-pro\t"));
     assert!(complete(&["nut", "drill", ""]).contains("outage\t"));
     assert!(complete(&["nut", "completion", "install", ""]).contains("bash\t"));
+    let doctor = complete(&["nut", "doctor", ""]);
+    assert!(
+        doctor.contains("protect.poweroff-wait\t") && doctor.contains("hw.usb\t"),
+        "{doctor}"
+    );
 }
 
 #[test]

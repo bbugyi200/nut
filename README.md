@@ -11,7 +11,8 @@ client that accepts loopback upsd connections only, and `nut bios` (guide, setup
 attest, and board profiles). `nut config render` can write generated files to a
 selected output directory; it does not apply them to live NUT configuration.
 Journal history is available through `nut events`, including outage stories and
-continuous legacy hook history. Remaining commands are reserved for later phases.
+continuous legacy hook history. `nut doctor` reports protection and recovery
+readiness with stable check IDs. Remaining commands are reserved for later phases.
 
 ~~~sh
 just check
@@ -38,6 +39,7 @@ See [development](docs/development.md) for the local gate and CI.
 - `nut bios` shows the matched board profile, setting state, boot-readiness audit, and attestation freshness.
 - `nut bios guide` prints a numbered keyboard walkthrough.
 - `nut bios profile list|show|new` lists, prints, or scaffolds a board profile.
+- `nut doctor [CHECK]...` reports protection checks with evidence and a `→` fix command; `--list` prints the catalog, `--observe SECS` watches driver restarts, and `--strict` fails on warnings. See [doctor checks](docs/doctor-checks.md). Doctor never fixes anything.
 
 See [BIOS guidance](docs/bios.md) and [adding a board](docs/adding-a-board.md).
 `sudo nut bios setup` and `sudo nut bios attest` are interactive and must not be

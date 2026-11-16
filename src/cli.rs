@@ -280,12 +280,32 @@ pub enum ProfileAction {
 #[derive(Args, Debug, Default)]
 pub struct DoctorArgs {
     /// Run additional stability observations for this many seconds.
-    #[arg(long, value_name = "SECONDS")]
+    #[arg(short = 'o', long, value_name = "SECS")]
     pub observe: Option<u64>,
 
     /// Treat warnings as failures.
-    #[arg(long)]
+    #[arg(short = 'S', long)]
     pub strict: bool,
+
+    /// List the check catalog without running checks.
+    #[arg(short = 'l', long)]
+    pub list: bool,
+
+    /// UPS name (defaults to the selected host configuration, or `cp1500`).
+    #[arg(long, value_name = "UPS")]
+    pub ups: Option<String>,
+
+    /// Loopback upsd address (defaults to 127.0.0.1).
+    #[arg(long, value_name = "ADDRESS")]
+    pub upsd_address: Option<String>,
+
+    /// Loopback upsd port (defaults to 3493).
+    #[arg(long, value_name = "PORT")]
+    pub upsd_port: Option<u16>,
+
+    /// Check IDs or section prefixes.
+    #[arg(value_name = "CHECK")]
+    pub checks: Vec<String>,
 }
 
 #[derive(Args, Debug, Default)]

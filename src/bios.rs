@@ -934,6 +934,7 @@ mod tests {
             ups_name: "primary".into(),
             description: "Reminder test".into(),
             variables: BTreeMap::from([("ups.status".into(), "OL".into())]),
+            ..Default::default()
         };
         let server = thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();

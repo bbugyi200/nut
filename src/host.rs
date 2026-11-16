@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 use std::time::{Duration, SystemTime};
 
 mod stream;
@@ -14,6 +15,21 @@ pub struct ProcessOutput {
     pub status: Option<i32>,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileMetadata {
+    pub uid: u32,
+    pub gid: u32,
+    pub mode: u32,
+    pub is_file: bool,
+    pub is_dir: bool,
+}
+
+impl FileMetadata {
+    pub fn executable(&self) -> bool {
+        self.mode & 0o111 != 0
+    }
 }
 
 #[derive(Debug, Error)]
@@ -61,6 +77,9 @@ pub trait Host {
     fn create_dir_all(&self, path: &Path) -> Result<(), HostError>;
     fn list_dir(&self, path: &Path) -> Result<Vec<String>, HostError>;
     fn path_exists(&self, path: &Path) -> Result<bool, HostError>;
+    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, HostError>;
+    fn current_exe(&self) -> Result<PathBuf, HostError>;
+    fn sleep(&self, duration: Duration);
     fn run_program(&self, program: &OsStr, args: &[OsString]) -> Result<ProcessOutput, HostError>;
     /// Read bounded process lines incrementally, with an optional total timeout.
     fn stream_program(
@@ -170,6 +189,29 @@ impl Host for SystemHost {
         Ok(path.exists())
     }
 
+    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, HostError> {
+        match fs::symlink_metadata(path) {
+            Ok(meta) => Ok(Some(unix_metadata(&meta))),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                Err(HostError::permission_denied(path))
+            }
+            Err(error) => Err(HostError::from_io(
+                &format!("cannot stat {}", path.display()),
+                error,
+            )),
+        }
+    }
+
+    fn current_exe(&self) -> Result<PathBuf, HostError> {
+        std::env::current_exe()
+            .map_err(|error| HostError::from_io("cannot resolve current executable", error))
+    }
+
+    fn sleep(&self, duration: Duration) {
+        thread::sleep(duration);
+    }
+
     fn run_program(&self, program: &OsStr, args: &[OsString]) -> Result<ProcessOutput, HostError> {
         let output = Command::new(program).args(args).output().map_err(|error| {
             HostError::from_io(&format!("cannot run {}", program.to_string_lossy()), error)
@@ -264,6 +306,30 @@ impl Host for SystemHost {
     }
 }
 
+fn unix_metadata(meta: &fs::Metadata) -> FileMetadata {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        FileMetadata {
+            uid: meta.uid(),
+            gid: meta.gid(),
+            mode: meta.mode() & 0o7777,
+            is_file: meta.file_type().is_file(),
+            is_dir: meta.file_type().is_dir(),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        FileMetadata {
+            uid: 0,
+            gid: 0,
+            mode: if meta.is_dir() { 0o755 } else { 0o644 },
+            is_file: meta.is_file(),
+            is_dir: meta.is_dir(),
+        }
+    }
+}
+
 fn parse_status_euid(bytes: Option<&[u8]>) -> Option<u32> {
     let text = std::str::from_utf8(bytes?).ok()?;
     for line in text.lines() {
@@ -288,15 +354,18 @@ pub struct FakeHost {
     files: RefCell<BTreeMap<PathBuf, Vec<u8>>>,
     dirs: RefCell<BTreeSet<PathBuf>>,
     unreadable: BTreeMap<PathBuf, ()>,
+    metadata: BTreeMap<PathBuf, FileMetadata>,
     programs: BTreeMap<OsString, ProcessOutput>,
     program_args: BTreeMap<(OsString, Vec<OsString>), ProcessOutput>,
     now: Option<SystemTime>,
     euid: Option<u32>,
     hostname: Option<String>,
+    current_exe: Option<PathBuf>,
     stdin_tty: bool,
     stdout_tty: bool,
     stderr_tty: bool,
     prompts: RefCell<VecDeque<String>>,
+    slept: RefCell<Duration>,
 }
 
 #[cfg(test)]
@@ -321,6 +390,20 @@ impl FakeHost {
     pub fn with_unreadable(mut self, path: impl Into<PathBuf>) -> Self {
         self.unreadable.insert(path.into(), ());
         self
+    }
+
+    pub fn with_metadata(mut self, path: impl Into<PathBuf>, metadata: FileMetadata) -> Self {
+        self.metadata.insert(path.into(), metadata);
+        self
+    }
+
+    pub fn with_current_exe(mut self, path: impl Into<PathBuf>) -> Self {
+        self.current_exe = Some(path.into());
+        self
+    }
+
+    pub fn slept(&self) -> Duration {
+        *self.slept.borrow()
     }
 
     pub fn with_program(mut self, program: impl Into<OsString>, output: ProcessOutput) -> Self {
@@ -441,12 +524,52 @@ impl Host for FakeHost {
     fn path_exists(&self, path: &Path) -> Result<bool, HostError> {
         Ok(self.files.borrow().contains_key(path)
             || self.dirs.borrow().contains(path)
+            || self.metadata.contains_key(path)
             || self
                 .files
                 .borrow()
                 .keys()
                 .any(|file| file.starts_with(path))
             || self.dirs.borrow().iter().any(|dir| dir.starts_with(path)))
+    }
+
+    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, HostError> {
+        if self.unreadable.contains_key(path) {
+            return Err(HostError::permission_denied(path));
+        }
+        if let Some(metadata) = self.metadata.get(path) {
+            return Ok(Some(metadata.clone()));
+        }
+        if self.files.borrow().contains_key(path) {
+            return Ok(Some(FileMetadata {
+                uid: 0,
+                gid: 0,
+                mode: 0o644,
+                is_file: true,
+                is_dir: false,
+            }));
+        }
+        if self.dirs.borrow().contains(path) {
+            return Ok(Some(FileMetadata {
+                uid: 0,
+                gid: 0,
+                mode: 0o755,
+                is_file: false,
+                is_dir: true,
+            }));
+        }
+        Ok(None)
+    }
+
+    fn current_exe(&self) -> Result<PathBuf, HostError> {
+        self.current_exe
+            .clone()
+            .ok_or_else(|| HostError::message("cannot resolve current executable"))
+    }
+
+    fn sleep(&self, duration: Duration) {
+        let mut slept = self.slept.borrow_mut();
+        *slept = slept.saturating_add(duration);
     }
 
     fn run_program(&self, program: &OsStr, args: &[OsString]) -> Result<ProcessOutput, HostError> {

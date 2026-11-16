@@ -214,7 +214,7 @@ fn fetch_status<H: Host>(
     include_all: bool,
 ) -> Result<StatusDocument, NutError> {
     let variables = UpsdClient::connect(&connection.address, connection.port, &connection.ups)
-        .and_then(UpsdClient::list_vars)
+        .and_then(|mut client| client.list_vars())
         .map_err(map_upsd_error)?;
     let status = variables.get("ups.status").ok_or_else(|| {
         NutError::operational("upsd did not report the required ups.status variable")
@@ -706,6 +706,7 @@ mod tests {
                 ("battery.runtime".into(), "1550".into()),
                 ("ups.load".into(), "28".into()),
             ]),
+            ..Default::default()
         };
         let server = thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();

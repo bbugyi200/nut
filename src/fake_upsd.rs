@@ -11,12 +11,16 @@ const MAX_COMMAND_BYTES: usize = 1024;
 const MAX_VARIABLES: usize = 1024;
 const IO_TIMEOUT: Duration = Duration::from_secs(2);
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FakeUpsdFixture {
     pub ups_name: String,
     pub description: String,
     pub variables: BTreeMap<String, String>,
+    #[serde(default)]
+    pub commands: Vec<String>,
+    #[serde(default)]
+    pub clients: Vec<String>,
 }
 
 impl FakeUpsdFixture {
@@ -127,7 +131,24 @@ pub fn serve_client(mut stream: TcpStream, fixture: &FakeUpsdFixture) -> io::Res
                     writeln!(stream, "ERR UNKNOWN-VAR {name}")?;
                 }
             }
-            ["LIST", "VAR", _] | ["GET", "VAR", _, _] => {
+            ["LIST", "CMD", ups] if ups.eq_ignore_ascii_case(&fixture.ups_name) => {
+                writeln!(stream, "BEGIN LIST CMD {}", fixture.ups_name)?;
+                for command in &fixture.commands {
+                    writeln!(stream, "CMD {} {command}", fixture.ups_name)?;
+                }
+                writeln!(stream, "END LIST CMD {}", fixture.ups_name)?;
+            }
+            ["LIST", "CLIENT", ups] if ups.eq_ignore_ascii_case(&fixture.ups_name) => {
+                writeln!(stream, "BEGIN LIST CLIENT {}", fixture.ups_name)?;
+                for client in &fixture.clients {
+                    writeln!(stream, "CLIENT {} {client}", fixture.ups_name)?;
+                }
+                writeln!(stream, "END LIST CLIENT {}", fixture.ups_name)?;
+            }
+            ["LIST", "VAR", _]
+            | ["GET", "VAR", _, _]
+            | ["LIST", "CMD", _]
+            | ["LIST", "CLIENT", _] => {
                 writeln!(stream, "ERR UNKNOWN-UPS")?;
             }
             _ => {
@@ -229,18 +250,25 @@ mod tests {
                 ("ups.status".into(), "OL CHRG".into()),
                 ("battery.charge".into(), "100".into()),
             ]),
+            commands: vec!["shutdown.return".into()],
+            clients: vec!["127.0.0.1".into()],
         };
         let server = thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             serve_client(stream, &fixture).unwrap();
         });
-        let vars = UpsdClient::connect("127.0.0.1", port, "demo")
-            .unwrap()
-            .list_vars()
-            .unwrap();
+        let mut client = UpsdClient::connect("127.0.0.1", port, "demo").unwrap();
+        let vars = client.list_vars().unwrap();
+        let version = client.version().unwrap();
+        let cmds = client.list_cmds().unwrap();
+        let clients = client.list_clients().unwrap();
+        drop(client);
         server.join().unwrap();
         assert_eq!(vars["ups.status"], "OL CHRG");
         assert_eq!(vars["battery.charge"], "100");
+        assert!(version.contains("2.8.1"), "{version}");
+        assert_eq!(cmds, vec!["shutdown.return"]);
+        assert_eq!(clients, vec!["127.0.0.1"]);
     }
 
     #[test]
@@ -249,6 +277,8 @@ mod tests {
             ups_name: "demo".into(),
             description: "fine".into(),
             variables: BTreeMap::from([("ups.status".into(), "OL\nFSD".into())]),
+            commands: Vec::new(),
+            clients: Vec::new(),
         };
         assert!(fixture.validate().is_err());
     }
