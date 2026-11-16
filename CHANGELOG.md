@@ -17,3 +17,7 @@
 - Add help/version output, offline CLI tests, and the documented safety contract.
 - Pin Rust, commit the dependency lockfile, and add the Justfile and SHA-pinned CI gates.
 - Register the SASE `check` tool with gate inputs and toolchain fingerprints.
+
+## Completion
+
+- Add live protocol-1 bash/zsh completion, grouped command descriptions, bounded UPS-name lookup, board profiles and backup stamps, and atomic adapter install/status/uninstall with real-shell CI tests.

@@ -79,3 +79,5 @@ here; machine-specific policy belongs in the host's configuration repository. Th
 captured fixture contains only the selected status fields, not every UPS variable.
 
 Licensed under [MIT](LICENSE).
+
+Shell completion: see [installation, status, and protocol](docs/completion.md).

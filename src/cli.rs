@@ -292,12 +292,41 @@ pub struct CompletionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum CompletionAction {
-    Install,
+    /// Install an adapter and verify registration in an isolated real shell.
+    Install {
+        #[arg(value_enum)]
+        shell: Option<crate::completion::Shell>,
+        /// Preview without creating files.
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+        /// Directory in which to install the adapter.
+        #[arg(short = 't', long, value_hint = clap::ValueHint::DirPath)]
+        target: Option<PathBuf>,
+        /// Replace a foreign or modified adapter.
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+    /// Inspect installed adapters and probe their registration.
     Status,
-    Uninstall,
+    /// Remove adapters whose bytes still match the recorded manifest.
+    Uninstall {
+        #[arg(value_enum)]
+        shell: Option<crate::completion::Shell>,
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+    },
     Zsh,
     Bash,
 }
+
+/// Workflow groups shared by help and completion.
+pub const COMMAND_GROUPS: &[(&str, &[&str])] = &[
+    ("Monitor", &["status", "battery", "events"]),
+    ("Act", &["beeper", "test", "notify"]),
+    ("Set up", &["init", "rollback", "config"]),
+    ("Prove", &["doctor", "bios", "drill"]),
+    ("Shell", &["completion"]),
+];
 
 /// Render the root help from Clap's command tree, keeping workflow groups explicit.
 pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()> {
@@ -316,15 +345,8 @@ pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()>
     writeln!(output)?;
     writeln!(output, "Commands:")?;
 
-    let groups = [
-        ("Monitor", &["status", "battery", "events"][..]),
-        ("Act", &["beeper", "test", "notify"][..]),
-        ("Set up", &["init", "rollback", "config"][..]),
-        ("Prove", &["doctor", "bios", "drill"][..]),
-        ("Shell", &["completion"][..]),
-    ];
     let subcommands = command.get_subcommands().collect::<Vec<_>>();
-    for (heading, names) in groups {
+    for &(heading, names) in COMMAND_GROUPS {
         writeln!(output, "{heading}:")?;
         for name in names {
             if let Some(subcommand) = subcommands.iter().find(|item| item.get_name() == *name) {
@@ -378,15 +400,8 @@ mod tests {
             .filter(|subcommand| !subcommand.is_hide_set())
             .map(|subcommand| subcommand.get_name().to_owned())
             .collect::<BTreeSet<_>>();
-        let groups = [
-            ["status", "battery", "events"].as_slice(),
-            &["beeper", "test", "notify"],
-            &["init", "rollback", "config"],
-            &["doctor", "bios", "drill"],
-            &["completion"],
-        ];
         let mut grouped = BTreeSet::new();
-        for names in groups {
+        for &(_, names) in COMMAND_GROUPS {
             for name in names {
                 assert!(
                     grouped.insert((*name).to_owned()),

@@ -39,3 +39,7 @@ captures only the status fields shown by the CLI into a local JSON file. Set
 SASE exposes `check` as `just check`, with declared gate inputs and toolchain
 fingerprints. After every push, watch the CI run for the exact pushed SHA through
 `/sase_monitor` before closing the phase.
+
+`just install-smoke` installs into a temporary root, checks every command help,
+and verifies both shell completion adapters. Bash and zsh are required; see
+[completion](completion.md) for the protocol and provider extension points.

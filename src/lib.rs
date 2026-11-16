@@ -2,6 +2,7 @@
 
 pub mod bios;
 pub mod cli;
+pub mod completion;
 pub mod config;
 pub mod duration;
 pub mod error;
@@ -28,6 +29,10 @@ pub fn run() -> i32 {
     if args.len() == 1 {
         args.push(OsString::from("status"));
     }
+    if args.get(1).is_some_and(|arg| arg == "__complete") {
+        // The hidden endpoint must never leak an internal panic into the prompt.
+        std::panic::set_hook(Box::new(|_| {}));
+    }
     let host = SystemHost;
     run_with_host(args, &host, &mut io::stdout(), &mut io::stderr())
 }
@@ -41,6 +46,9 @@ where
     E: Write,
 {
     let args = args.into_iter().map(Into::into).collect::<Vec<OsString>>();
+    if args.get(1).is_some_and(|arg| arg == "__complete") {
+        return completion::complete(&args[2..], host, stdout, stderr);
+    }
     if is_root_help(&args) {
         return match cli::write_root_help(stdout) {
             Ok(()) => 0,
@@ -146,6 +154,7 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
             host,
             stdout,
         ),
+        Command::Completion(args) => completion::run(args.action, cli.json, host, stdout),
         Command::Events(_)
         | Command::Beeper(_)
         | Command::Test(_)
@@ -153,8 +162,7 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
         | Command::Init(_)
         | Command::Rollback(_)
         | Command::Doctor(_)
-        | Command::Drill(_)
-        | Command::Completion(_) => Err(NutError::operational(
+        | Command::Drill(_) => Err(NutError::operational(
             "this command is provided by a later nut phase",
         )),
     }

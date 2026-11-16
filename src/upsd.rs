@@ -5,6 +5,97 @@ use std::time::Duration;
 
 use thiserror::Error;
 
+/// Read LIST UPS within one wall-clock budget, including connect and slow/drip
+/// responses. Numeric loopback addresses avoid unbounded DNS during completion.
+pub fn list_ups(
+    address: &str,
+    port: u16,
+    budget: Duration,
+) -> Result<Vec<(String, String)>, UpsdError> {
+    use std::io::Read;
+    use std::time::Instant;
+    let started = Instant::now();
+    let ip: IpAddr = if address.eq_ignore_ascii_case("localhost") {
+        IpAddr::from([127, 0, 0, 1])
+    } else {
+        address
+            .parse()
+            .map_err(|_| UpsdError::NonLoopbackAddress(address.into()))?
+    };
+    if !ip.is_loopback() {
+        return Err(UpsdError::NonLoopbackAddress(address.into()));
+    }
+    let failure = |error: io::Error| UpsdError::Protocol(format!("LIST UPS: {error}"));
+    let remaining = || {
+        budget
+            .checked_sub(started.elapsed())
+            .filter(|duration| !duration.is_zero())
+            .ok_or_else(|| failure(io::ErrorKind::TimedOut.into()))
+    };
+    let mut stream =
+        TcpStream::connect_timeout(&SocketAddr::new(ip, port), remaining()?).map_err(failure)?;
+    stream
+        .set_write_timeout(Some(remaining()?))
+        .map_err(failure)?;
+    stream.write_all(b"LIST UPS\n").map_err(failure)?;
+    let mut bytes = Vec::new();
+    let mut rows = Vec::new();
+    let mut begun = false;
+    let mut line_count = 0;
+    let mut total = 0;
+    loop {
+        stream
+            .set_read_timeout(Some(remaining()?))
+            .map_err(failure)?;
+        let mut chunk = [0; 4096];
+        let count = stream.read(&mut chunk).map_err(failure)?;
+        if count == 0 {
+            return Err(failure(io::ErrorKind::UnexpectedEof.into()));
+        }
+        total += count;
+        if total > MAX_RESPONSE_BYTES {
+            return Err(UpsdError::Protocol("LIST UPS response too large".into()));
+        }
+        bytes.extend_from_slice(&chunk[..count]);
+        while let Some(end) = bytes.iter().position(|byte| *byte == b'\n') {
+            line_count += 1;
+            if end > MAX_LINE_BYTES || line_count > MAX_RESPONSE_LINES {
+                return Err(UpsdError::Protocol("LIST UPS limits exceeded".into()));
+            }
+            let line = std::str::from_utf8(&bytes[..end])
+                .map_err(|error| UpsdError::Protocol(error.to_string()))?
+                .trim_end_matches('\r');
+            if let Some(error) = parse_server_error(line) {
+                return Err(error);
+            }
+            if !begun {
+                if line == "BEGIN LIST UPS" {
+                    begun = true;
+                } else if line_count != 1 || !line.starts_with("Network UPS Tools upsd ") {
+                    return Err(UpsdError::Protocol("expected BEGIN LIST UPS".into()));
+                }
+            } else if line == "END LIST UPS" {
+                return Ok(rows);
+            } else if let Some((name, description)) = line
+                .strip_prefix("UPS ")
+                .and_then(|line| line.split_once(' '))
+            {
+                validate_ups_name(name)?;
+                if rows.iter().any(|(existing, _)| existing == name) {
+                    return Err(UpsdError::Protocol("duplicate UPS name".into()));
+                }
+                rows.push((name.to_owned(), parse_quoted_value(description)?));
+            } else {
+                return Err(UpsdError::Protocol("expected UPS row".into()));
+            }
+            bytes.drain(..=end);
+        }
+        if bytes.len() > MAX_LINE_BYTES {
+            return Err(UpsdError::Protocol("LIST UPS line too large".into()));
+        }
+    }
+}
+
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const IO_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_LINE_BYTES: usize = 4 * 1024;

@@ -86,6 +86,11 @@ hook-shellcheck: (_banner "35" "HOOK")
         echo "shellcheck not installed; skipping hook check"; \
     fi
 
+# Build, install into a temporary root, smoke all help, and exercise completion.
+install-smoke:
+    cargo build --locked --bin nut
+    bash scripts/install_smoke.sh "${CARGO_TARGET_DIR:-target}/debug/nut"
+
 # Review insta snapshots.
 snap:
     cargo insta review
