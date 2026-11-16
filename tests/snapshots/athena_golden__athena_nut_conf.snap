@@ -1,0 +1,7 @@
+---
+source: tests/athena_golden.rs
+expression: files.nut_conf.as_str()
+---
+# Managed by nut. Edit the host config instead of this file.
+MODE=standalone
+POWEROFF_WAIT=30m

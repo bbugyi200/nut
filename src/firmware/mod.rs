@@ -215,7 +215,7 @@ pub fn resolve_profile<'a>(
     config: Option<&HostConfig>,
     dmi: &DmiInfo,
 ) -> &'a BoardProfile {
-    if let Some(id) = config.and_then(|config| config.host.board_profile.as_ref())
+    if let Some(id) = config.and_then(|config| config.boot.board_profile.as_ref())
         && let Some(profile) = catalog.board(id)
     {
         return profile;

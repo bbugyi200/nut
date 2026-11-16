@@ -78,8 +78,20 @@ lint: (_banner "33" "LINT")
 test: (_banner "32" "TEST")
     cargo test --locked --workspace --all-features --no-fail-fast
 
-# Run the canonical offline formatting, lint, and test gate.
-check: fmt lint test
+# Shellcheck the golden rendered event hook when shellcheck is installed.
+hook-shellcheck: (_banner "35" "HOOK")
+    @if command -v shellcheck >/dev/null; then \
+        shellcheck -s sh tests/fixtures/hosts/athena/expected/nut-upssched-cmd; \
+    else \
+        echo "shellcheck not installed; skipping hook check"; \
+    fi
+
+# Review insta snapshots.
+snap:
+    cargo insta review
+
+# Run the canonical offline formatting, lint, test, and hook shellcheck gate.
+check: fmt lint test hook-shellcheck
 
 # Run nut with the given arguments.
 run *args:

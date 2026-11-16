@@ -1,0 +1,5 @@
+# Local primary only; the installer generates the shared password, never logs it.
+# Rationale: research:202610/cp1500pfclcd_battery_swap_and_athena_auto_power_on/cp1500pfclcd_battery_swap_and_athena_auto_power_on.md (Step 5).
+[upsmon]
+    password = @UPSMON_PASSWORD@
+    upsmon primary

@@ -6,8 +6,9 @@ use `--locked`. `cargo fmt` does not accept that flag; the formatting recipes fi
 validate the lockfile with `cargo metadata --locked --no-deps`.
 
 The canonical gate checks formatting, the bob-cli compiler and Clippy deny lists,
-forbidden process environment mutation, integration tests, and doctests. The lists
-were copied verbatim from bob-cli's justfile, with `clippy::disallowed_methods` added
+forbidden process environment mutation, integration tests, doctests, and shellcheck
+on the golden rendered event hook when `shellcheck` is installed. The lists were
+copied verbatim from bob-cli's justfile, with `clippy::disallowed_methods` added
 to enforce this project's `clippy.toml`.
 
 - `just` lists recipes; `just all` runs the same gate as `just check`.
@@ -19,6 +20,8 @@ to enforce this project's `clippy.toml`.
   read-only command (`bios`, `bios guide`, `bios profile`, `config`, `status`,
   and the other allowlisted verbs). It never runs `bios setup`, `bios attest`,
   drills, or other write/power actions.
+- `just hook-shellcheck` runs ShellCheck on the golden `nut-upssched-cmd` when the tool is installed.
+- `just snap` reviews insta snapshots of rendered NUT files.
 
 CI runs the same format/lint and test recipes on pushes to `main` and pull requests.
 Actions are pinned by commit, permissions are read-only, and superseded runs are

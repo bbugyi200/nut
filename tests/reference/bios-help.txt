@@ -21,7 +21,7 @@ Options:
           Emit machine-readable JSON where supported
       --verbose
           Include additional diagnostic detail
-      --config <PATH>
+  -c, --config <PATH>
           Read host settings from this file
   -h, --help
           Print help

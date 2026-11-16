@@ -1,43 +1,69 @@
 # Host configuration
 
-The host file is TOML with schema_version = 1. It describes machine policy and points
-at reusable UPS and board profiles. Hardware profiles belong in the nut crate; a
-machine's selected profile and policy values belong beside that machine's deployment
-configuration.
+The host file is TOML with `schema = 1`. It describes machine policy and points at
+reusable UPS and board profiles. Hardware profiles belong in the nut crate; a machine's
+selected profile and policy values belong beside that machine's deployment
+configuration. v1 supports exactly one UPS.
 
 A minimal file looks like this:
 
 ~~~toml
-schema_version = 1
+schema = 1
 
 [host]
 name = "example-host"
-board_profile = "example-board"
 
-[ups]
-name = "main"
-profile = "example-ups"
-upsd_address = "127.0.0.1"
-upsd_port = 3493
+[ups.primary]
+profile = "usbhid-generic"
+description = "Example USB HID UPS"
+port = "auto"
+offdelay = "60s"
+ondelay = "0s"
 
-[protection]
+[ups.primary.match]
+vendorid = "0764"
+productid = "0601"
+
+[ups.primary.extra]
+maxretry = 3
+retrydelay = 5
+
+[shutdown]
+notify_after = "30s"
+early_after = "3m"
 poweroff_wait = "45m"
-on_battery_shutdown = "180s"
-low_battery_runtime = "5m"
-battery_replaced = "2026-01-01"
+shutdown_budget = "2m"
 
-[[mounts]]
-path = "/srv/data"
-nofail = true
+[notify]
+from = "root@example.invalid"
+to = "operator@example.invalid"
+commbad_after = "60s"
 
-[notifications]
-recipients = ["operator@example.invalid"]
+[boot]
+nofail_mounts = ["/srv/data"]
+board_profile = "asus-prime-trx40-pro"
+
+[operators]
+users = ["operator"]
+journal = false
 ~~~
 
-host.board_profile is optional. upsd_address and upsd_port default to loopback and
-3493. Durations are integer seconds (s), minutes (m), or hours (h). Unknown fields are
-rejected so misspelled or unsupported settings do not silently disappear. The schema
-has no credential fields: NUT secrets stay in protected runtime files.
+`nut config path` prints the selected file and why it was chosen (`--config`,
+`NUT_CONFIG`, or the default `/etc/nut-cli/nut.toml`). `nut config show` prints the
+resolved values with each hardware field's source (host, profile, or default).
+`nut config new` scaffolds a commented file from live USB and DMI discovery.
+`nut config render` writes NUT files and the `nut-upssched-cmd` hook with secret
+placeholders. `nut config diff` compares that rendering with live files and masks
+passwords; unreadable `/etc/nut` files are reported as `contents need root`.
 
-Use nut config path to see which file the CLI selected and nut config show to check
-that it parses. --config PATH overrides NUT_CONFIG, which overrides the XDG default.
+Durations are an integer followed by `s`, `m`, or `h`. Unknown fields are rejected so
+misspelled or unsupported settings do not silently disappear. The schema has no
+credential fields: NUT secrets stay in protected runtime files. UPS names, mail
+addresses, and `extra` ups.conf values are validated before interpolation so a stray
+quote or newline cannot inject an `AT … EXECUTE` line or shell.
+
+Embedded UPS profiles live in `profiles/ups/`. Host-local overrides may be dropped in
+`/etc/nut-cli/ups/*.toml` and `/etc/nut-cli/boards/*.toml` without rebuilding nut.
+The CyberPower CP1500PFCLCD profile pins delays 60/0, USB ids `0764:0501` and
+`0764:0601`, 1000 W, and the RB1290X2 / RB1280X2B cartridges. Athena's unit is 0601,
+so its host file sets `match.productid`.

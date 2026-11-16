@@ -1,0 +1,42 @@
+# Redacted athena host policy. Mail addresses use example.invalid.
+# POWEROFF_WAIT stays at the deployed 30m so golden parity matches live files;
+# the adopt phase raises it to 45m.
+schema = 1
+
+[host]
+name = "athena"
+
+[ups.cp1500]
+profile = "cyberpower-cp1500pfclcd"
+description = "CyberPower CP1500PFCLCD"
+port = "auto"
+
+[ups.cp1500.match]
+vendorid = "0764"
+productid = "0601"
+
+[ups.cp1500.extra]
+maxretry = 3
+retrydelay = 5
+
+[shutdown]
+notify_after = "30s"
+early_after = "3m"
+poweroff_wait = "30m"
+shutdown_budget = "2m"
+
+[notify]
+from = "root@example.invalid"
+to = "ups@example.invalid"
+commbad_after = "60s"
+
+[boot]
+nofail_mounts = ["/mnt/poseidon", "/mnt/hades"]
+board_profile = "asus-prime-trx40-pro"
+
+[operators]
+users = ["bryan"]
+journal = false
+
+[battery]
+installed = "2026-04-01"

@@ -1,0 +1,43 @@
+#!/bin/sh
+# Managed by nut. Edit the host config instead of this file.
+# upssched runs this as nut. Never invoke power events manually on the live host.
+# Only offline tests may override PATH; every external command is then stubbed.
+set -u
+PATH=${NUT_UPSSCHED_TEST_PATH:-/usr/sbin:/usr/bin:/sbin:/bin}
+export PATH
+
+event=${1:-}
+case "$event" in
+    early-shutdown)
+        logger -t nut-upssched 'on battery for 180 s; starting NUT forced shutdown'
+        exec upsmon -c fsd
+        ;;
+    onbatt) summary='on battery' ;;
+    online) summary='power restored' ;;
+    lowbatt) summary='battery low' ;;
+    shutdown) summary='shutdown starting' ;;
+    commbad) summary='communication lost' ;;
+    commok) summary='communication restored' ;;
+    nocomm) summary='UPS unavailable' ;;
+    replbatt) summary='replace battery' ;;
+    test-notify) summary='test notification' ;;
+    *) logger -t nut-upssched "unknown event: $event"; exit 1 ;;
+esac
+logger -t nut-upssched "$event: $summary"
+
+sender='root@example.invalid'
+recipient='ups@example.invalid'
+{
+    printf 'From: athena UPS <%s>\nTo: %s\nSubject: athena UPS: %s\n\n' "$sender" "$recipient" "$summary"
+    printf 'Event: %s (%s)\nTime: %s\n\n' "$event" "$summary" "$(date --iso-8601=seconds)"
+    if readings=$(timeout 5 upsc cp1500@localhost 2>/dev/null); then
+        printf '%s\n' "$readings" | awk '/^(ups.status|battery.charge|battery.runtime|ups.load|input.voltage):/'
+    else
+        printf 'UPS readings unavailable (upsc failed or timed out).\n'
+    fi
+} | timeout 15 sendmail -f "$sender" -t
+result=$?
+if [ "$result" -ne 0 ]; then
+    logger -t nut-upssched "mail submission failed for $event (exit $result)"
+fi
+exit 0

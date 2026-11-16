@@ -1,0 +1,14 @@
+schema = 1
+id = "cyberpower-cp1500pfclcd"
+manufacturer = "CyberPower"
+model = "CP1500PFCLCD"
+model_aliases = ["CP1500PFCLCDa"]
+driver = "usbhid-ups"
+usb_ids = ["0764:0501", "0764:0601"]
+offdelay = "60s"
+ondelay = "0s"
+offdelay_rationale = "CyberPower HID offdelay is seconds; 60s after the outlet-cycle command retains battery for the BIOS Power On path."
+ondelay_rationale = "Nonzero ondelay has caused some units to restart on battery. 0 returns outlets immediately when mains returns."
+nominal_va = 1500
+nominal_watts = 1000
+cartridges = ["RB1290X2", "RB1280X2B"]

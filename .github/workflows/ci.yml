@@ -48,6 +48,8 @@ jobs:
       - name: Install test shells
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bash zsh
-      - name: Run tests and doctests
-        run: just test
+          sudo apt-get install -y --no-install-recommends bash zsh shellcheck
+      - name: Run tests, doctests, and hook shellcheck
+        run: |
+          just test
+          just hook-shellcheck

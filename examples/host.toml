@@ -1,23 +1,39 @@
-schema_version = 1
+# Generic host policy example. This file contains no secrets.
+schema = 1
 
 [host]
 name = "example-host"
-board_profile = "example-board"
 
-[ups]
-name = "primary"
-profile = "example-ups"
-upsd_address = "127.0.0.1"
-upsd_port = 3493
+[ups.primary]
+profile = "usbhid-generic"
+description = "Example USB HID UPS"
+port = "auto"
+offdelay = "60s"
+ondelay = "0s"
 
-[protection]
+[ups.primary.match]
+vendorid = "0764"
+productid = "0601"
+
+[ups.primary.extra]
+maxretry = 3
+retrydelay = 5
+
+[shutdown]
+notify_after = "30s"
+early_after = "3m"
 poweroff_wait = "45m"
-on_battery_shutdown = "180s"
-low_battery_runtime = "5m"
+shutdown_budget = "2m"
 
-[[mounts]]
-path = "/srv/data"
-nofail = true
+[notify]
+from = "root@example.invalid"
+to = "operator@example.invalid"
+commbad_after = "60s"
 
-[notifications]
-recipients = ["operator@example.invalid"]
+[boot]
+nofail_mounts = ["/srv/data"]
+board_profile = "asus-prime-trx40-pro"
+
+[operators]
+users = ["operator"]
+journal = false

@@ -1,0 +1,11 @@
+schema = 1
+id = "dummy"
+manufacturer = "NUT"
+model = "dummy-ups"
+driver = "dummy-ups"
+usb_ids = []
+offdelay = "60s"
+ondelay = "0s"
+offdelay_rationale = "e2e fixture; dummy-ups does not drive a real outlet cycle."
+ondelay_rationale = "e2e fixture; dummy-ups does not restore real outlets."
+cartridges = []

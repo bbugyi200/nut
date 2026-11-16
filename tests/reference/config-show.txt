@@ -1,8 +1,16 @@
+path             examples/host.toml (--config)
 Host             example-host
-UPS              primary (example-ups)
-upsd             127.0.0.1:3493
-Board profile    example-board
-Poweroff wait    45m
-Shutdown delay   3m
-Protected mounts 1
-Notifications    1 recipient(s)
+UPS              primary (usbhid-generic)
+  driver         usbhid-ups (profile)
+  port           auto (host)
+  usb            0764:0601 (host)
+  offdelay       1m (host)
+  ondelay        0s (host)
+notify_after     30s
+early_after      3m
+poweroff_wait    45m
+notify from      root@example.invalid
+notify to        operator@example.invalid
+Board profile    asus-prime-trx40-pro
+nofail mounts    1
+operators        operator

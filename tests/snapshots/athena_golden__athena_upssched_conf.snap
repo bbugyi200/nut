@@ -1,0 +1,18 @@
+---
+source: tests/athena_golden.rs
+expression: files.upssched_conf.as_str()
+---
+# Managed by nut. Edit the host config instead of this file.
+CMDSCRIPT /usr/local/sbin/nut-upssched-cmd
+PIPEFN /run/nut/upssched/upssched.pipe
+LOCKFN /run/nut/upssched/upssched.lock
+AT ONBATT * START-TIMER early-shutdown 180
+AT ONLINE * CANCEL-TIMER early-shutdown
+AT ONBATT * START-TIMER onbatt 30
+AT ONLINE * CANCEL-TIMER onbatt online
+AT LOWBATT * EXECUTE lowbatt
+AT SHUTDOWN * EXECUTE shutdown
+AT COMMBAD * START-TIMER commbad 60
+AT COMMOK * CANCEL-TIMER commbad commok
+AT NOCOMM * EXECUTE nocomm
+AT REPLBATT * EXECUTE replbatt

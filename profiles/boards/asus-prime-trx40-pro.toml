@@ -42,3 +42,4 @@ menu_path = ["Boot", "Wait For 'F1' If Error"]
 required = "Disabled"
 optional = true
 why = "A headless machine must not stop on a POST warning."
+

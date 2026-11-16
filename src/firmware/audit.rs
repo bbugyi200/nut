@@ -110,7 +110,7 @@ fn nofail_mounts<H: Host>(host: &H, config: Option<&HostConfig>) -> BootCheck {
     let Some(config) = config else {
         return pass("boot.nofail", "no host config mounts are listed");
     };
-    if config.mounts.is_empty() {
+    if config.boot.nofail_mounts.is_empty() {
         return pass("boot.nofail", "no host config mounts are listed");
     }
     let Some(fstab) = crate::firmware::read_trimmed(host, Path::new("/etc/fstab"))
@@ -121,8 +121,8 @@ fn nofail_mounts<H: Host>(host: &H, config: Option<&HostConfig>) -> BootCheck {
     };
     let mut missing = Vec::new();
     let mut lacking = Vec::new();
-    for mount in &config.mounts {
-        let wanted = mount.path.to_string_lossy();
+    for mount in &config.boot.nofail_mounts {
+        let wanted = mount.to_string_lossy();
         match fstab_options(&fstab, wanted.as_ref()) {
             Some(options) if has_option(&options, "nofail") => {}
             Some(_) => lacking.push(wanted.into_owned()),
@@ -132,7 +132,10 @@ fn nofail_mounts<H: Host>(host: &H, config: Option<&HostConfig>) -> BootCheck {
     if lacking.is_empty() && missing.is_empty() {
         return pass(
             "boot.nofail",
-            &format!("{} listed mount(s) carry nofail", config.mounts.len()),
+            &format!(
+                "{} listed mount(s) carry nofail",
+                config.boot.nofail_mounts.len()
+            ),
         );
     }
     let mut evidence = Vec::new();
@@ -333,20 +336,27 @@ mod tests {
     use super::*;
     use crate::config::HostConfig;
     use crate::host::{FakeHost, ProcessOutput};
-    use std::path::PathBuf;
 
     fn config_with_mount(path: &str) -> HostConfig {
         HostConfig::parse(&format!(
             r#"
-schema_version = 1
+schema = 1
 [host]
 name = "athena"
-[ups]
-name = "cp1500"
+[ups.cp1500]
 profile = "cyberpower-cp1500pfclcd"
-[[mounts]]
-path = "{path}"
-nofail = true
+port = "auto"
+[shutdown]
+notify_after = "30s"
+early_after = "3m"
+poweroff_wait = "30m"
+shutdown_budget = "2m"
+[notify]
+from = "root@example.invalid"
+to = "ups@example.invalid"
+commbad_after = "60s"
+[boot]
+nofail_mounts = ["{path}"]
 "#
         ))
         .unwrap()
@@ -398,6 +408,5 @@ nofail = true
         assert_eq!(checks[3].status, CheckStatus::Pass);
         assert_eq!(checks[4].status, CheckStatus::Warn);
         assert_eq!(checks[5].status, CheckStatus::Warn);
-        let _ = PathBuf::from("/mnt/poseidon");
     }
 }

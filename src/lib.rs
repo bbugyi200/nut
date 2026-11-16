@@ -3,10 +3,12 @@
 pub mod bios;
 pub mod cli;
 pub mod config;
+pub mod duration;
 pub mod error;
 pub mod firmware;
 pub mod host;
 pub mod profiles;
+pub mod render;
 pub mod ui;
 
 use std::ffi::OsString;
@@ -64,6 +66,9 @@ where
         Ok(()) => 0,
         Err(error) => {
             let _ = writeln!(stderr, "nut: {error}");
+            if let Some(hint) = error.hint() {
+                let _ = writeln!(stderr, "→ {hint}");
+            }
             error.exit_code()
         }
     }
@@ -79,13 +84,14 @@ fn is_root_help(args: &[OsString]) -> bool {
         match argument {
             "--help" | "-h" => help_requested = true,
             "--ascii" | "--json" | "-j" | "--verbose" => {}
-            "--color" | "--config" => {
+            "-c" | "--color" | "--config" => {
                 index += 1;
                 if index >= args.len() {
                     return false;
                 }
             }
             value if value.starts_with("--color=") || value.starts_with("--config=") => {}
+            value if value.starts_with("-c") && !value.starts_with("--") => {}
             _ => return false,
         }
         index += 1;
@@ -147,10 +153,9 @@ mod tests {
             &mut err,
         );
         assert_eq!(code, 0);
-        assert_eq!(
-            String::from_utf8(out).unwrap(),
-            "/home/bryan/.config/nut/nut-cli.toml\n"
-        );
+        let output = String::from_utf8(out).unwrap();
+        assert!(output.contains("/etc/nut-cli/nut.toml"));
+        assert!(output.contains("source: default"));
         assert!(err.is_empty());
     }
 

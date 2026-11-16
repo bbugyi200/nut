@@ -1,0 +1,13 @@
+---
+source: tests/athena_golden.rs
+expression: files.upsd_users.as_str()
+---
+# Managed by nut. Edit the host config instead of this file.
+[upsmon]
+password = @UPSMON_PASSWORD@
+upsmon primary
+
+[nut-operator]
+password = @OPERATOR_PASSWORD@
+instcmds = beeper.disable, beeper.enable, beeper.mute, test.battery.start.quick, test.battery.stop
+actions = SET

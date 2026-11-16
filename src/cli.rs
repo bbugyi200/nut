@@ -31,7 +31,7 @@ pub struct Cli {
     pub verbose: bool,
 
     /// Read host settings from this file.
-    #[arg(long, value_name = "PATH", global = true)]
+    #[arg(short = 'c', long, value_name = "PATH", global = true)]
     pub config: Option<PathBuf>,
 
     #[command(subcommand)]
@@ -72,7 +72,7 @@ pub enum Command {
     #[command(about = "List or restore a configuration backup")]
     Rollback(RollbackArgs),
 
-    #[command(about = "Inspect host settings and profiles")]
+    #[command(about = "Inspect, scaffold, render, or diff host settings")]
     Config(ConfigArgs),
 
     #[command(about = "Guide and verify BIOS recovery settings")]
@@ -180,12 +180,26 @@ pub struct ConfigArgs {
     pub action: Option<ConfigAction>,
 }
 
-#[derive(Debug, Subcommand, Clone, Copy)]
+#[derive(Debug, Subcommand, Clone)]
 pub enum ConfigAction {
-    /// Print the selected host configuration path.
+    /// Print the selected host configuration path and why it was chosen.
     Path,
     /// Parse and display the selected host configuration.
     Show,
+    /// Scaffold a commented host config from live USB and DMI discovery.
+    New {
+        /// Write the scaffold to this path instead of stdout.
+        #[arg(short, long, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
+    /// Render NUT files and the event hook with secret placeholders.
+    Render {
+        /// Write each rendered file into this directory.
+        #[arg(short, long, value_name = "DIR")]
+        output: Option<PathBuf>,
+    },
+    /// Compare rendered files with live NUT configuration. Secrets are masked.
+    Diff,
 }
 
 #[derive(Args, Debug, Default)]
@@ -313,7 +327,7 @@ pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()>
     )?;
     writeln!(
         output,
-        "      --config <PATH>      Read host settings from this file"
+        "  -c, --config <PATH>      Read host settings from this file"
     )?;
     writeln!(
         output,

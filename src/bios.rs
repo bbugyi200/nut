@@ -95,7 +95,7 @@ fn optional_config<H: Host>(
     config_override: Option<&Path>,
 ) -> Result<Option<HostConfig>, NutError> {
     match load_config(host, config_override) {
-        Ok((_, config)) => Ok(Some(config)),
+        Ok((_, _, config)) => Ok(Some(config)),
         Err(ConfigError::NotFound(_)) if config_override.is_none() => Ok(None),
         Err(ConfigError::NoHome) if config_override.is_none() => Ok(None),
         Err(error) => Err(NutError::operational(error.to_string())),

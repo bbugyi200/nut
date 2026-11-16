@@ -1,0 +1,16 @@
+---
+source: tests/athena_golden.rs
+expression: files.ups_conf.as_str()
+---
+# Managed by nut. Edit the host config instead of this file.
+maxretry = 3
+retrydelay = 5
+
+[cp1500]
+    driver = usbhid-ups
+    port = auto
+    vendorid = 0764
+    productid = 0601
+    desc = "CyberPower CP1500PFCLCD"
+    offdelay = 60
+    ondelay = 0

@@ -1,12 +1,18 @@
-Inspect host settings and profiles
+Inspect, scaffold, render, or diff host settings
 
 Usage: nut config [OPTIONS] [COMMAND]
 
 Commands:
   path
-          Print the selected host configuration path
+          Print the selected host configuration path and why it was chosen
   show
           Parse and display the selected host configuration
+  new
+          Scaffold a commented host config from live USB and DMI discovery
+  render
+          Render NUT files and the event hook with secret placeholders
+  diff
+          Compare rendered files with live NUT configuration. Secrets are masked
 
 Options:
       --color <WHEN>
@@ -17,7 +23,7 @@ Options:
           Emit machine-readable JSON where supported
       --verbose
           Include additional diagnostic detail
-      --config <PATH>
+  -c, --config <PATH>
           Read host settings from this file
   -h, --help
           Print help

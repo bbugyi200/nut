@@ -18,19 +18,33 @@ pub struct ProcessOutput {
 #[error("{message}")]
 pub struct HostError {
     message: String,
+    permission_denied: bool,
 }
 
 impl HostError {
     fn from_io(context: &str, error: io::Error) -> Self {
         Self {
             message: format!("{context}: {error}"),
+            permission_denied: error.kind() == io::ErrorKind::PermissionDenied,
         }
     }
 
     pub fn message(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            permission_denied: false,
         }
+    }
+
+    pub fn permission_denied(path: &Path) -> Self {
+        Self {
+            message: format!("cannot read {}: permission denied", path.display()),
+            permission_denied: true,
+        }
+    }
+
+    pub fn is_permission_denied(&self) -> bool {
+        self.permission_denied
     }
 }
 
@@ -74,6 +88,9 @@ impl Host for SystemHost {
         match fs::read(path) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                Err(HostError::permission_denied(path))
+            }
             Err(error) => Err(HostError::from_io(
                 &format!("cannot read {}", path.display()),
                 error,
@@ -101,18 +118,27 @@ impl Host for SystemHost {
     }
 
     fn list_dir(&self, path: &Path) -> Result<Vec<String>, HostError> {
-        let entries = fs::read_dir(path).map_err(|error| {
-            HostError::from_io(&format!("cannot list {}", path.display()), error)
-        })?;
-        let mut names = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(|error| {
-                HostError::from_io(&format!("cannot list {}", path.display()), error)
-            })?;
-            names.push(entry.file_name().to_string_lossy().into_owned());
+        match fs::read_dir(path) {
+            Ok(entries) => {
+                let mut names = Vec::new();
+                for entry in entries {
+                    let entry = entry.map_err(|error| {
+                        HostError::from_io(&format!("cannot list {}", path.display()), error)
+                    })?;
+                    names.push(entry.file_name().to_string_lossy().into_owned());
+                }
+                names.sort();
+                Ok(names)
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                Err(HostError::permission_denied(path))
+            }
+            Err(error) => Err(HostError::from_io(
+                &format!("cannot list {}", path.display()),
+                error,
+            )),
         }
-        names.sort();
-        Ok(names)
     }
 
     fn path_exists(&self, path: &Path) -> Result<bool, HostError> {
@@ -228,6 +254,7 @@ pub struct FakeHost {
     env: BTreeMap<String, OsString>,
     files: RefCell<BTreeMap<PathBuf, Vec<u8>>>,
     dirs: RefCell<BTreeSet<PathBuf>>,
+    unreadable: BTreeMap<PathBuf, ()>,
     programs: BTreeMap<OsString, ProcessOutput>,
     program_args: BTreeMap<(OsString, Vec<OsString>), ProcessOutput>,
     now: Option<SystemTime>,
@@ -255,6 +282,11 @@ impl FakeHost {
 
     pub fn with_dir(self, path: impl Into<PathBuf>) -> Self {
         self.dirs.borrow_mut().insert(path.into());
+        self
+    }
+
+    pub fn with_unreadable(mut self, path: impl Into<PathBuf>) -> Self {
+        self.unreadable.insert(path.into(), ());
         self
     }
 
@@ -321,6 +353,9 @@ impl Host for FakeHost {
     }
 
     fn read_file(&self, path: &Path) -> Result<Option<Vec<u8>>, HostError> {
+        if self.unreadable.contains_key(path) {
+            return Err(HostError::permission_denied(path));
+        }
         Ok(self.files.borrow().get(path).cloned())
     }
 
@@ -338,6 +373,9 @@ impl Host for FakeHost {
     }
 
     fn list_dir(&self, path: &Path) -> Result<Vec<String>, HostError> {
+        if self.unreadable.contains_key(path) {
+            return Err(HostError::permission_denied(path));
+        }
         let files = self.files.borrow();
         let dirs = self.dirs.borrow();
         let mut names = BTreeSet::new();

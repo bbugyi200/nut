@@ -20,6 +20,7 @@ impl ExitClass {
 pub struct NutError {
     class: ExitClass,
     message: String,
+    hint: Option<String>,
 }
 
 impl NutError {
@@ -27,6 +28,7 @@ impl NutError {
         Self {
             class: ExitClass::Operational,
             message: message.into(),
+            hint: None,
         }
     }
 
@@ -34,7 +36,17 @@ impl NutError {
         Self {
             class: ExitClass::Usage,
             message: message.into(),
+            hint: None,
         }
+    }
+
+    pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
+    }
+
+    pub fn hint(&self) -> Option<&str> {
+        self.hint.as_deref()
     }
 
     pub fn exit_code(&self) -> i32 {

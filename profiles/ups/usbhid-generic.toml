@@ -1,0 +1,9 @@
+schema = 1
+id = "usbhid-generic"
+manufacturer = "generic"
+model = "USB HID UPS"
+driver = "usbhid-ups"
+usb_ids = []
+offdelay_rationale = "Set offdelay in the host config; this generic profile does not pin CyberPower-specific delays."
+ondelay_rationale = "Set ondelay in the host config; nonzero values can wake some HID units on battery."
+cartridges = []
