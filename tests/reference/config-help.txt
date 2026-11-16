@@ -1,0 +1,23 @@
+Inspect host settings and profiles
+
+Usage: nut config [OPTIONS] [COMMAND]
+
+Commands:
+  path
+          Print the selected host configuration path
+  show
+          Parse and display the selected host configuration
+
+Options:
+      --color <WHEN>
+          Color output policy [default: auto] [possible values: auto, always, never]
+      --ascii
+          Use ASCII symbols and bars
+  -j, --json
+          Emit machine-readable JSON where supported
+      --verbose
+          Include additional diagnostic detail
+      --config <PATH>
+          Read host settings from this file
+  -h, --help
+          Print help

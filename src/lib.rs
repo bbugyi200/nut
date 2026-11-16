@@ -1,12 +1,174 @@
-//! Management-plane CLI for Network UPS Tools.
-//!
-//! NUT daemons and their shell hook remain responsible for outage protection.
 #![forbid(unsafe_code)]
 
-/// Build the bootstrap command without accessing hardware or changing host state.
-pub fn command() -> clap::Command {
-    clap::Command::new("nut")
-        .version(env!("CARGO_PKG_VERSION"))
-        .about("Manage, check, and prove NUT UPS protection")
-        .after_help("Bootstrap only: monitoring and management commands are not implemented yet.\nNUT daemons remain responsible for outage protection.")
+pub mod cli;
+pub mod config;
+pub mod error;
+pub mod host;
+pub mod profiles;
+pub mod ui;
+
+use std::ffi::OsString;
+use std::io::{self, Write};
+
+use clap::Parser;
+
+use crate::cli::{Cli, Command};
+use crate::error::NutError;
+use crate::host::{Host, SystemHost};
+
+pub fn run() -> i32 {
+    let mut args = std::env::args_os().collect::<Vec<_>>();
+    if args.len() == 1 {
+        args.push(OsString::from("status"));
+    }
+    let host = SystemHost;
+    run_with_host(args, &host, &mut io::stdout(), &mut io::stderr())
+}
+
+pub fn run_with_host<I, T, H, O, E>(args: I, host: &H, stdout: &mut O, stderr: &mut E) -> i32
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+    H: Host,
+    O: Write,
+    E: Write,
+{
+    let args = args.into_iter().map(Into::into).collect::<Vec<OsString>>();
+    if is_root_help(&args) {
+        return match cli::write_root_help(stdout) {
+            Ok(()) => 0,
+            Err(error) => {
+                let _ = writeln!(stderr, "nut: cannot write help: {error}");
+                1
+            }
+        };
+    }
+
+    let cli = match Cli::try_parse_from(args) {
+        Ok(cli) => cli,
+        Err(error) => {
+            let code = error.exit_code();
+            let rendered = error.render();
+            if error.use_stderr() {
+                let _ = write!(stderr, "{rendered}");
+            } else {
+                let _ = write!(stdout, "{rendered}");
+            }
+            return code;
+        }
+    };
+
+    match execute(cli, host, stdout) {
+        Ok(()) => 0,
+        Err(error) => {
+            let _ = writeln!(stderr, "nut: {error}");
+            error.exit_code()
+        }
+    }
+}
+
+fn is_root_help(args: &[OsString]) -> bool {
+    let mut help_requested = false;
+    let mut index = 1;
+    while index < args.len() {
+        let Some(argument) = args[index].to_str() else {
+            return false;
+        };
+        match argument {
+            "--help" | "-h" => help_requested = true,
+            "--ascii" | "--json" | "-j" | "--verbose" => {}
+            "--color" | "--config" => {
+                index += 1;
+                if index >= args.len() {
+                    return false;
+                }
+            }
+            value if value.starts_with("--color=") || value.starts_with("--config=") => {}
+            _ => return false,
+        }
+        index += 1;
+    }
+    help_requested
+}
+
+fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), NutError> {
+    match cli.command.unwrap_or(Command::Status(Default::default())) {
+        Command::Config(args) => {
+            config::run(args.action, cli.config.as_deref(), cli.json, host, stdout)
+        }
+        Command::Status(_)
+        | Command::Battery(_)
+        | Command::Events(_)
+        | Command::Beeper(_)
+        | Command::Test(_)
+        | Command::Notify(_)
+        | Command::Init(_)
+        | Command::Rollback(_)
+        | Command::Bios(_)
+        | Command::Doctor(_)
+        | Command::Drill(_)
+        | Command::Completion(_) => Err(NutError::operational(
+            "this command is provided by a later nut phase",
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::host::FakeHost;
+
+    #[test]
+    fn config_path_command_uses_fake_host_and_never_reads_config() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = run_with_host(
+            ["nut", "config", "path"],
+            &FakeHost::default().with_env("HOME", "/home/bryan"),
+            &mut out,
+            &mut err,
+        );
+        assert_eq!(code, 0);
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "/home/bryan/.config/nut/nut-cli.toml\n"
+        );
+        assert!(err.is_empty());
+    }
+
+    #[test]
+    fn bad_arguments_use_usage_exit_code() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = run_with_host(
+            ["nut", "no-such-command"],
+            &FakeHost::default(),
+            &mut out,
+            &mut err,
+        );
+        assert_eq!(code, 2);
+        assert!(out.is_empty());
+        assert!(
+            String::from_utf8(err)
+                .unwrap()
+                .contains("unrecognized subcommand")
+        );
+    }
+
+    #[test]
+    fn root_help_is_grouped_even_with_global_options() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let code = run_with_host(
+            ["nut", "--color", "always", "--help"],
+            &FakeHost::default(),
+            &mut out,
+            &mut err,
+        );
+        assert_eq!(code, 0);
+        let output = String::from_utf8(out).unwrap();
+        assert!(output.contains("Monitor:"));
+        assert!(output.contains("Set up:"));
+        assert!(err.is_empty());
+    }
 }

@@ -1,0 +1,32 @@
+Manage and verify NUT UPS protection
+
+Usage: nut [OPTIONS] [COMMAND]
+
+Commands:
+Monitor:
+  status       Show UPS status
+  battery      Show battery charge and runtime
+  events       Show UPS event history
+Act:
+  beeper       Show or change the UPS beeper
+  test         Run a guarded battery self-test
+  notify       Send or inspect UPS notifications
+Set up:
+  init         Plan or apply NUT configuration
+  rollback     List or restore a configuration backup
+  config       Inspect host settings and profiles
+  bios         Guide and verify BIOS recovery settings
+Prove:
+  doctor       Check UPS protection and recovery readiness
+  drill        Guide and record a physical outage drill
+Shell:
+  completion   Install, inspect, or remove shell completion
+
+Options:
+  -h, --help              Print help
+  -V, --version           Print version
+      --ascii              Use ASCII symbols and bars
+      --color <WHEN>       Color output: auto, always, or never [default: auto]
+      --config <PATH>      Read host settings from this file
+  -j, --json              Emit machine-readable JSON where supported
+      --verbose            Include additional diagnostic detail

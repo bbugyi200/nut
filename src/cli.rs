@@ -1,0 +1,319 @@
+use std::path::PathBuf;
+
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
+
+/// Manage and verify NUT UPS protection.
+#[derive(Debug, Parser)]
+#[command(
+    name = "nut",
+    version,
+    about = "Manage and verify NUT UPS protection",
+    long_about = "A read-first management CLI for Network UPS Tools. NUT's daemons remain the only part of the outage shutdown path.",
+    subcommand_required = false,
+    disable_help_subcommand = true,
+    next_line_help = true
+)]
+pub struct Cli {
+    /// Color output policy.
+    #[arg(long, value_enum, value_name = "WHEN", default_value_t = ColorChoice::Auto, global = true)]
+    pub color: ColorChoice,
+
+    /// Use ASCII symbols and bars.
+    #[arg(long, global = true)]
+    pub ascii: bool,
+
+    /// Emit machine-readable JSON where supported.
+    #[arg(short = 'j', long, global = true)]
+    pub json: bool,
+
+    /// Include additional diagnostic detail.
+    #[arg(long, global = true)]
+    pub verbose: bool,
+
+    /// Read host settings from this file.
+    #[arg(long, value_name = "PATH", global = true)]
+    pub config: Option<PathBuf>,
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum ColorChoice {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    #[command(about = "Show UPS status")]
+    Status(StatusArgs),
+
+    #[command(about = "Show battery charge and runtime")]
+    Battery(BatteryArgs),
+
+    #[command(about = "Show UPS event history")]
+    Events(EventsArgs),
+
+    #[command(about = "Show or change the UPS beeper")]
+    Beeper(BeeperArgs),
+
+    #[command(about = "Run a guarded battery self-test")]
+    Test(TestArgs),
+
+    #[command(about = "Send or inspect UPS notifications")]
+    Notify(NotifyArgs),
+
+    #[command(about = "Plan or apply NUT configuration")]
+    Init(InitArgs),
+
+    #[command(about = "List or restore a configuration backup")]
+    Rollback(RollbackArgs),
+
+    #[command(about = "Inspect host settings and profiles")]
+    Config(ConfigArgs),
+
+    #[command(about = "Guide and verify BIOS recovery settings")]
+    Bios(BiosArgs),
+
+    #[command(about = "Check UPS protection and recovery readiness")]
+    Doctor(DoctorArgs),
+
+    #[command(about = "Guide and record a physical outage drill")]
+    Drill(DrillArgs),
+
+    #[command(about = "Install, inspect, or remove shell completion")]
+    Completion(CompletionArgs),
+}
+
+#[derive(Args, Debug, Default)]
+pub struct StatusArgs {
+    /// Continuously refresh the status view.
+    #[arg(long)]
+    pub watch: bool,
+
+    /// Include raw NUT variables.
+    #[arg(long)]
+    pub all: bool,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct BatteryArgs {}
+
+#[derive(Args, Debug, Default)]
+pub struct EventsArgs {
+    /// Include events newer than this duration.
+    #[arg(long, value_name = "DURATION")]
+    pub since: Option<String>,
+
+    /// Follow new events.
+    #[arg(long)]
+    pub follow: bool,
+
+    /// Show only the most recent outage.
+    #[arg(long)]
+    pub last_outage: bool,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct BeeperArgs {
+    #[command(subcommand)]
+    pub action: Option<BeeperAction>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BeeperAction {
+    Mute,
+    Enable,
+    Disable,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct TestArgs {
+    #[command(subcommand)]
+    pub action: Option<TestAction>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TestAction {
+    Quick,
+    Stop,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct NotifyArgs {
+    #[command(subcommand)]
+    pub action: Option<NotifyAction>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum NotifyAction {
+    Test,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct InitArgs {
+    /// Show the plan without applying changes.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Apply only when the recomputed plan matches this hash.
+    #[arg(long, value_name = "HASH")]
+    pub expect_plan: Option<String>,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct RollbackArgs {
+    /// List available backups.
+    #[arg(long)]
+    pub list: bool,
+
+    /// Backup stamp to restore.
+    pub stamp: Option<String>,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct ConfigArgs {
+    #[command(subcommand)]
+    pub action: Option<ConfigAction>,
+}
+
+#[derive(Debug, Subcommand, Clone, Copy)]
+pub enum ConfigAction {
+    /// Print the selected host configuration path.
+    Path,
+    /// Parse and display the selected host configuration.
+    Show,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct BiosArgs {
+    #[command(subcommand)]
+    pub action: Option<BiosAction>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BiosAction {
+    Guide,
+    Setup,
+    Attest,
+    Profile {
+        #[command(subcommand)]
+        action: Option<ProfileAction>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProfileAction {
+    List,
+    Show { id: String },
+    New,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct DoctorArgs {
+    /// Run additional stability observations for this many seconds.
+    #[arg(long, value_name = "SECONDS")]
+    pub observe: Option<u64>,
+
+    /// Treat warnings as failures.
+    #[arg(long)]
+    pub strict: bool,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct DrillArgs {
+    #[command(subcommand)]
+    pub action: Option<DrillAction>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DrillAction {
+    Blip,
+    AcLoss,
+    Cycle,
+    Outage,
+    Report,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct CompletionArgs {
+    #[command(subcommand)]
+    pub action: Option<CompletionAction>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CompletionAction {
+    Install,
+    Status,
+    Uninstall,
+    Zsh,
+    Bash,
+}
+
+/// Render the root help from Clap's command tree, keeping workflow groups explicit.
+pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()> {
+    let mut command = Cli::command();
+    command.build();
+    writeln!(
+        output,
+        "{}",
+        command
+            .get_about()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "Manage and verify NUT UPS protection".to_owned())
+    )?;
+    writeln!(output)?;
+    writeln!(output, "Usage: nut [OPTIONS] [COMMAND]")?;
+    writeln!(output)?;
+    writeln!(output, "Commands:")?;
+
+    let groups = [
+        ("Monitor", &["status", "battery", "events"][..]),
+        ("Act", &["beeper", "test", "notify"][..]),
+        ("Set up", &["init", "rollback", "config", "bios"][..]),
+        ("Prove", &["doctor", "drill"][..]),
+        ("Shell", &["completion"][..]),
+    ];
+    let subcommands = command.get_subcommands().collect::<Vec<_>>();
+    for (heading, names) in groups {
+        writeln!(output, "{heading}:")?;
+        for name in names {
+            if let Some(subcommand) = subcommands.iter().find(|item| item.get_name() == *name) {
+                let description = subcommand
+                    .get_about()
+                    .map(ToString::to_string)
+                    .unwrap_or_default();
+                writeln!(output, "  {name:<12} {description}")?;
+            }
+        }
+    }
+
+    writeln!(output)?;
+    writeln!(output, "Options:")?;
+    writeln!(output, "  -h, --help              Print help")?;
+    writeln!(output, "  -V, --version           Print version")?;
+    writeln!(
+        output,
+        "      --ascii              Use ASCII symbols and bars"
+    )?;
+    writeln!(
+        output,
+        "      --color <WHEN>       Color output: auto, always, or never [default: auto]"
+    )?;
+    writeln!(
+        output,
+        "      --config <PATH>      Read host settings from this file"
+    )?;
+    writeln!(
+        output,
+        "  -j, --json              Emit machine-readable JSON where supported"
+    )?;
+    writeln!(
+        output,
+        "      --verbose            Include additional diagnostic detail"
+    )?;
+    Ok(())
+}

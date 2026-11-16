@@ -1,0 +1,23 @@
+schema_version = 1
+
+[host]
+name = "example-host"
+board_profile = "example-board"
+
+[ups]
+name = "primary"
+profile = "example-ups"
+upsd_address = "127.0.0.1"
+upsd_port = 3493
+
+[protection]
+poweroff_wait = "45m"
+on_battery_shutdown = "180s"
+low_battery_runtime = "5m"
+
+[[mounts]]
+path = "/srv/data"
+nofail = true
+
+[notifications]
+recipients = ["operator@example.invalid"]
