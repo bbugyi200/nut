@@ -1,0 +1,20 @@
+is_sase_managed: true
+
+tools:
+  check:
+    argv: [just, check]
+    description: Run the canonical Rust verification gate (fmt, clippy, tests).
+    stages: run_silent
+    inputs:
+      - justfile
+      - Cargo.toml
+      - Cargo.lock
+      - clippy.toml
+      - rustfmt.toml
+      - rust-toolchain.toml
+    args: deny
+    fingerprint:
+      toolchain:
+        just: [just, --version]
+        cargo: [cargo, --version]
+        rustc: [rustc, --version]

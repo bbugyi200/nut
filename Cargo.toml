@@ -1,0 +1,19 @@
+[package]
+name = "nut-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+description = "Manage, check, and prove NUT UPS protection"
+license = "MIT"
+repository = "https://github.com/bbugyi200/nut"
+
+[lib]
+name = "nut_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nut"
+path = "src/main.rs"
+
+[dependencies]
+clap = "4.6.6"

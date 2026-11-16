@@ -1,0 +1,4 @@
+disallowed-methods = [
+    { path = "std::env::set_var", reason = "Inject environment through Host; never mutate process-global environment." },
+    { path = "std::env::remove_var", reason = "Inject environment through Host; never mutate process-global environment." },
+]
