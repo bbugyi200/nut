@@ -1,0 +1,27 @@
+Guide and verify BIOS recovery settings
+
+Usage: nut bios [OPTIONS] [COMMAND]
+
+Commands:
+  guide
+          Print a numbered keyboard walkthrough for this board
+  setup
+          Reboot into firmware setup after a hostname interlock
+  attest
+          Record a BIOS-version-pinned attestation receipt
+  profile
+          List, show, or scaffold a board profile
+
+Options:
+      --color <WHEN>
+          Color output policy [default: auto] [possible values: auto, always, never]
+      --ascii
+          Use ASCII symbols and bars
+  -j, --json
+          Emit machine-readable JSON where supported
+      --verbose
+          Include additional diagnostic detail
+      --config <PATH>
+          Read host settings from this file
+  -h, --help
+          Print help

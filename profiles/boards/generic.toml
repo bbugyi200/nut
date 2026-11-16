@@ -1,0 +1,24 @@
+schema = 1
+id = "generic"
+backend = "manual"
+fingerprint_efivars = [
+    "Setup-*",
+]
+caveats = [
+    "Vendor labels vary: AC Power Recovery, AC Back, After Power Failure, State After G3, Restore On AC Power Loss, Power On After Power Fail.",
+    "Set the equivalent of Power On or Always On, never Last State.",
+]
+sources = [
+    "Common UEFI power-loss policy labels across ASUS, Dell, HP, Lenovo, MSI, Gigabyte, and AMI boards",
+]
+
+[keys]
+setup = "Del"
+advanced_mode = "F2"
+save = "F10"
+
+[[settings]]
+id = "ac-power-loss"
+menu_path = ["Power", "Restore On AC Power Loss"]
+required = "Power On"
+why = "Choose Power On or Always On. Last State stays off after a clean NUT shutdown."

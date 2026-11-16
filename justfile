@@ -81,6 +81,77 @@ test: (_banner "32" "TEST")
 # Run the canonical offline formatting, lint, and test gate.
 check: fmt lint test
 
+# Run nut with the given arguments.
+run *args:
+    cargo run --locked -- {{args}}
+
+# Build a release binary, copy it to HOST, and run a read-only nut command over SSH.
+remote host +args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=({{args}})
+    scan=("${args[@]}")
+    while [[ ${#scan[@]} -gt 0 && "${scan[0]}" == -* ]]; do
+        case "${scan[0]}" in
+            --color|--config|-c|-s|-u)
+                if [[ ${#scan[@]} -lt 2 ]]; then
+                    echo "just remote: ${scan[0]} needs a value" >&2
+                    exit 2
+                fi
+                scan=("${scan[@]:2}")
+                ;;
+            *)
+                scan=("${scan[@]:1}")
+                ;;
+        esac
+    done
+    subcommand="${scan[0]:-}"
+    action="${scan[1]:-}"
+    extra="${scan[2]:-}"
+    allowed=0
+    case "$subcommand" in
+        ""|-h|--help|-V|--version) allowed=1 ;;
+        status|battery|events|doctor) allowed=1 ;;
+        config)
+            case "$action" in
+                ""|show|path|render|diff|-h|--help) allowed=1 ;;
+            esac
+            ;;
+        bios)
+            case "$action" in
+                ""|guide|profile|-h|--help) allowed=1 ;;
+            esac
+            ;;
+        beeper|drill)
+            [[ -z "$action" || "$action" == "-h" || "$action" == "--help" ]] && allowed=1
+            ;;
+        init)
+            for arg in "${scan[@]}"; do
+                if [[ "$arg" == "--dry-run" || "$arg" == "-n" ]]; then
+                    allowed=1
+                fi
+            done
+            ;;
+        completion)
+            [[ "$action" == "status" || "$action" == "-h" || "$action" == "--help" || -z "$action" ]] && allowed=1
+            ;;
+    esac
+    if [[ "$subcommand" == "bios" && "$action" == "profile" ]]; then
+        case "$extra" in
+            ""|list|show|new|-h|--help) allowed=1 ;;
+            *) allowed=0 ;;
+        esac
+    fi
+    if [[ "$allowed" -ne 1 ]]; then
+        echo "just remote: refusing '${args[*]}'; only read-only nut commands are allowed" >&2
+        exit 2
+    fi
+    cargo build --locked --release
+    bin="${CARGO_TARGET_DIR:-target}/release/nut"
+    ssh -T "{{host}}" mkdir -p ~/.cache/nut-cli
+    scp -q "$bin" "{{host}}:.cache/nut-cli/nut"
+    ssh -T "{{host}}" ~/.cache/nut-cli/nut "${args[@]}"
+
 # Render a section banner, using color only on a terminal.
 _banner color label:
     @if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != dumb ]]; then \

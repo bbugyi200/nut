@@ -28,6 +28,16 @@ fn config_help_matches_reference() {
 }
 
 #[test]
+fn bios_help_matches_reference() {
+    let output = nut(&["bios", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/bios-help.txt")
+    );
+}
+
+#[test]
 fn invalid_command_uses_usage_exit_code() {
     let output = nut(&["not-a-command"]);
     assert_eq!(output.status.code(), Some(2));

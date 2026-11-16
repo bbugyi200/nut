@@ -1,0 +1,44 @@
+schema = 1
+id = "asus-prime-trx40-pro"
+backend = "manual"
+fingerprint_efivars = [
+    "Setup-*",
+    "AmdSetup-*",
+]
+caveats = [
+    "ASUS Restore On AC Power Loss needs about 30 s of true AC loss (PSU off or a UPS outlet cycle). Brief blips may not trigger it.",
+    "Use Power On, never Last State: NUT powers the OS off before the outlets cut, so last state is off.",
+    "After a deliberate shutdown, any later AC blip will boot the machine. Flip the PSU switch to keep it off for maintenance.",
+]
+sources = [
+    "ASUS PRIME TRX40-PRO manual E16115, section 3.6.9 APM Configuration",
+    "ASUS FAQ 1049855 Restore AC Power Loss",
+]
+
+[match]
+board_vendor = "ASUSTeK COMPUTER INC."
+board_name = "PRIME TRX40-PRO"
+
+[keys]
+setup = "Del"
+advanced_mode = "F7"
+save = "F10"
+
+[[settings]]
+id = "ac-power-loss"
+menu_path = ["Advanced", "APM Configuration", "Restore On AC Power Loss"]
+required = "Power On"
+why = "NUT shuts Linux down before the outlets cycle, so Last State would leave the machine off."
+
+[[settings]]
+id = "erp-ready"
+menu_path = ["Advanced", "APM Configuration", "ErP Ready"]
+required = "Disabled"
+why = "ErP Ready cuts standby power and can prevent Restore On AC Power Loss from working."
+
+[[settings]]
+id = "f1-wait"
+menu_path = ["Boot", "Wait For 'F1' If Error"]
+required = "Disabled"
+optional = true
+why = "A headless machine must not stop on a POST warning."

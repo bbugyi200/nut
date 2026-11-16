@@ -14,6 +14,11 @@ to enforce this project's `clippy.toml`.
 - `just format` applies Rust formatting; `just fmt` checks it.
 - `just lint` runs Clippy on all targets and features.
 - `just test` runs tests and doctests without stopping after the first failed binary.
+- `just run *args` runs the crate's `nut` binary.
+- `just remote host *args` copies a release binary to `HOST` over SSH and runs a
+  read-only command (`bios`, `bios guide`, `bios profile`, `config`, `status`,
+  and the other allowlisted verbs). It never runs `bios setup`, `bios attest`,
+  drills, or other write/power actions.
 
 CI runs the same format/lint and test recipes on pushes to `main` and pull requests.
 Actions are pinned by commit, permissions are read-only, and superseded runs are

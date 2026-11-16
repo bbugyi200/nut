@@ -1,8 +1,11 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::Path;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+
+use crate::host::Host;
 
 /// Stable kebab-case identifier shared by host settings and embedded profile catalogs.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
@@ -91,23 +94,115 @@ pub struct UpsProfile {
     pub nominal_watts: Option<u32>,
 }
 
+const BOARD_SCHEMA: u32 = 1;
+const EMBEDDED_BOARD_PROFILES: &[(&str, &str)] = &[
+    (
+        "asus-prime-trx40-pro",
+        include_str!("../profiles/boards/asus-prime-trx40-pro.toml"),
+    ),
+    ("generic", include_str!("../profiles/boards/generic.toml")),
+];
+const BOARD_OVERRIDE_DIR: &str = "/etc/nut-cli/boards";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BiosBackendKind {
+    Manual,
+    FirmwareAttributes,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoardMatch {
+    pub board_vendor: String,
+    #[serde(deserialize_with = "deserialize_one_or_many")]
+    pub board_name: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FirmwareKeys {
+    pub setup: String,
+    #[serde(default)]
+    pub advanced_mode: Option<String>,
+    pub save: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoardSetting {
+    pub id: String,
+    pub menu_path: Vec<String>,
+    pub required: String,
+    #[serde(default)]
+    pub optional: bool,
+    pub why: String,
+    #[serde(default)]
+    pub attribute: Option<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BoardProfile {
+    pub schema: u32,
     pub id: ProfileId,
-    pub dmi_vendor: String,
+    #[serde(rename = "match", default)]
+    pub match_: Option<BoardMatch>,
+    pub keys: FirmwareKeys,
     #[serde(default)]
-    pub dmi_names: Vec<String>,
-    pub bios_vendor: Option<String>,
+    pub fingerprint_efivars: Vec<String>,
+    pub backend: BiosBackendKind,
+    #[serde(default)]
+    pub settings: Vec<BoardSetting>,
+    #[serde(default)]
+    pub caveats: Vec<String>,
+    #[serde(default)]
+    pub sources: Vec<String>,
 }
 
 impl BoardProfile {
+    pub fn parse(contents: &str) -> Result<Self, ProfileError> {
+        let profile: Self =
+            toml::from_str(contents).map_err(|error| ProfileError::Parse(error.to_string()))?;
+        if profile.schema != BOARD_SCHEMA {
+            return Err(ProfileError::UnsupportedSchema(profile.schema));
+        }
+        Ok(profile)
+    }
+
     pub fn matches(&self, vendor: &str, board_name: &str) -> bool {
-        self.dmi_vendor.eq_ignore_ascii_case(vendor)
-            && self
-                .dmi_names
+        let Some(spec) = &self.match_ else {
+            return false;
+        };
+        spec.board_vendor.eq_ignore_ascii_case(vendor)
+            && spec
+                .board_name
                 .iter()
                 .any(|name| name.eq_ignore_ascii_case(board_name))
+    }
+
+    pub fn display_name(&self) -> &str {
+        self.match_
+            .as_ref()
+            .and_then(|spec| spec.board_name.first())
+            .map(String::as_str)
+            .unwrap_or_else(|| self.id.as_str())
+    }
+}
+
+fn deserialize_one_or_many<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(String),
+        Many(Vec<String>),
+    }
+    match OneOrMany::deserialize(deserializer)? {
+        OneOrMany::One(value) => Ok(vec![value]),
+        OneOrMany::Many(values) => Ok(values),
     }
 }
 
@@ -119,6 +214,10 @@ pub enum ProfileError {
     InvalidUsbId(String),
     #[error("duplicate profile identifier {0}")]
     Duplicate(ProfileId),
+    #[error("cannot parse board profile: {0}")]
+    Parse(String),
+    #[error("unsupported board profile schema version {0}; this build supports version 1")]
+    UnsupportedSchema(u32),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -159,6 +258,45 @@ impl ProfileCatalog {
     pub fn board_profiles(&self) -> impl Iterator<Item = &BoardProfile> {
         self.boards.values()
     }
+
+    pub fn with_embedded_boards() -> Result<Self, ProfileError> {
+        let mut catalog = Self::default();
+        for (_, contents) in EMBEDDED_BOARD_PROFILES {
+            catalog.insert_board(BoardProfile::parse(contents)?)?;
+        }
+        Ok(catalog)
+    }
+
+    pub fn load_board_overrides<H: Host>(&mut self, host: &H) -> Result<(), ProfileError> {
+        let names = match host.list_dir(Path::new(BOARD_OVERRIDE_DIR)) {
+            Ok(names) => names,
+            Err(_) => return Ok(()),
+        };
+        for name in names {
+            if !name.ends_with(".toml") {
+                continue;
+            }
+            let path = Path::new(BOARD_OVERRIDE_DIR).join(&name);
+            let Some(bytes) = host
+                .read_file(&path)
+                .map_err(|error| ProfileError::Parse(error.to_string()))?
+            else {
+                continue;
+            };
+            let contents = std::str::from_utf8(&bytes)
+                .map_err(|error| ProfileError::Parse(error.to_string()))?;
+            let profile = BoardProfile::parse(contents)?;
+            self.boards.insert(profile.id.clone(), profile);
+        }
+        Ok(())
+    }
+
+    pub fn match_board(&self, vendor: &str, board_name: &str) -> Option<&BoardProfile> {
+        self.boards
+            .values()
+            .find(|profile| profile.matches(vendor, board_name))
+            .or_else(|| self.board(&ProfileId::new("generic").ok()?))
+    }
 }
 
 #[cfg(test)]
@@ -185,13 +323,34 @@ mod tests {
 
     #[test]
     fn board_match_uses_board_dmi_fields_case_insensitively() {
-        let profile = BoardProfile {
-            id: ProfileId::new("asus-trx40").unwrap(),
-            dmi_vendor: "ASUSTeK COMPUTER INC.".into(),
-            dmi_names: vec!["PRIME TRX40-PRO".into()],
-            bios_vendor: Some("American Megatrends".into()),
-        };
+        let profile =
+            BoardProfile::parse(include_str!("../profiles/boards/asus-prime-trx40-pro.toml"))
+                .unwrap();
         assert!(profile.matches("asustek computer inc.", "prime trx40-pro"));
         assert!(!profile.matches("ASUSTeK COMPUTER INC.", "System Product Name"));
+        assert_eq!(profile.backend, BiosBackendKind::Manual);
+        assert_eq!(profile.settings[0].id, "ac-power-loss");
+        assert!(profile.settings.iter().any(|setting| setting.optional));
+    }
+
+    #[test]
+    fn generic_profile_is_the_fallback_and_never_auto_matches() {
+        let catalog = ProfileCatalog::with_embedded_boards().unwrap();
+        let generic = catalog.board(&ProfileId::new("generic").unwrap()).unwrap();
+        assert!(!generic.matches("ASUSTeK COMPUTER INC.", "PRIME TRX40-PRO"));
+        let matched = catalog
+            .match_board("ASUSTeK COMPUTER INC.", "PRIME TRX40-PRO")
+            .unwrap();
+        assert_eq!(matched.id.as_str(), "asus-prime-trx40-pro");
+        let fallback = catalog
+            .match_board("Unknown Vendor", "Mystery Board")
+            .unwrap();
+        assert_eq!(fallback.id.as_str(), "generic");
+        assert!(
+            generic
+                .caveats
+                .iter()
+                .any(|caveat| caveat.contains("Last State"))
+        );
     }
 }

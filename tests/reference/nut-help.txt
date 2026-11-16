@@ -15,9 +15,9 @@ Set up:
   init         Plan or apply NUT configuration
   rollback     List or restore a configuration backup
   config       Inspect host settings and profiles
-  bios         Guide and verify BIOS recovery settings
 Prove:
   doctor       Check UPS protection and recovery readiness
+  bios         Guide and verify BIOS recovery settings
   drill        Guide and record a physical outage drill
 Shell:
   completion   Install, inspect, or remove shell completion

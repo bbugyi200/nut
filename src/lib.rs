@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
+pub mod bios;
 pub mod cli;
 pub mod config;
 pub mod error;
+pub mod firmware;
 pub mod host;
 pub mod profiles;
 pub mod ui;
@@ -96,15 +98,31 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
         Command::Config(args) => {
             config::run(args.action, cli.config.as_deref(), cli.json, host, stdout)
         }
-        Command::Status(_)
-        | Command::Battery(_)
+        Command::Bios(args) => bios::run(
+            bios::BiosRun {
+                action: args.action,
+                json: cli.json,
+                ascii: cli.ascii,
+                color: cli.color,
+                verbose: cli.verbose,
+                config: cli.config.as_deref(),
+            },
+            host,
+            stdout,
+        ),
+        Command::Status(_) => {
+            let _ = bios::write_pending_reminder(host, cli.ascii, stdout)?;
+            Err(NutError::operational(
+                "this command is provided by a later nut phase",
+            ))
+        }
+        Command::Battery(_)
         | Command::Events(_)
         | Command::Beeper(_)
         | Command::Test(_)
         | Command::Notify(_)
         | Command::Init(_)
         | Command::Rollback(_)
-        | Command::Bios(_)
         | Command::Doctor(_)
         | Command::Drill(_)
         | Command::Completion(_) => Err(NutError::operational(

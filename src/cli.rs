@@ -196,9 +196,17 @@ pub struct BiosArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum BiosAction {
+    /// Print a numbered keyboard walkthrough for this board.
     Guide,
-    Setup,
+    /// Reboot into firmware setup after a hostname interlock.
+    Setup {
+        /// Refused. BIOS setup cannot be unattended.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Record a BIOS-version-pinned attestation receipt.
     Attest,
+    /// List, show, or scaffold a board profile.
     Profile {
         #[command(subcommand)]
         action: Option<ProfileAction>,
@@ -273,8 +281,8 @@ pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()>
     let groups = [
         ("Monitor", &["status", "battery", "events"][..]),
         ("Act", &["beeper", "test", "notify"][..]),
-        ("Set up", &["init", "rollback", "config", "bios"][..]),
-        ("Prove", &["doctor", "drill"][..]),
+        ("Set up", &["init", "rollback", "config"][..]),
+        ("Prove", &["doctor", "bios", "drill"][..]),
         ("Shell", &["completion"][..]),
     ];
     let subcommands = command.get_subcommands().collect::<Vec<_>>();
@@ -316,4 +324,42 @@ pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()>
         "      --verbose            Include additional diagnostic detail"
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn every_visible_command_appears_in_exactly_one_help_group() {
+        let mut command = Cli::command();
+        command.build();
+        let visible = command
+            .get_subcommands()
+            .filter(|subcommand| !subcommand.is_hide_set())
+            .map(|subcommand| subcommand.get_name().to_owned())
+            .collect::<BTreeSet<_>>();
+        let groups = [
+            ["status", "battery", "events"].as_slice(),
+            &["beeper", "test", "notify"],
+            &["init", "rollback", "config"],
+            &["doctor", "bios", "drill"],
+            &["completion"],
+        ];
+        let mut grouped = BTreeSet::new();
+        for names in groups {
+            for name in names {
+                assert!(
+                    grouped.insert((*name).to_owned()),
+                    "{name} appears in more than one help group"
+                );
+                assert!(
+                    visible.contains(*name),
+                    "{name} is grouped but not a visible command"
+                );
+            }
+        }
+        assert_eq!(grouped, visible);
+    }
 }
