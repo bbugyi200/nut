@@ -97,10 +97,34 @@ pub struct StatusArgs {
     /// Include raw NUT variables.
     #[arg(long)]
     pub all: bool,
+
+    /// UPS name (defaults to the selected host configuration, or `primary`).
+    #[arg(long, value_name = "UPS")]
+    pub ups: Option<String>,
+
+    /// Loopback upsd address (defaults to host configuration, or 127.0.0.1).
+    #[arg(long, value_name = "ADDRESS")]
+    pub upsd_address: Option<String>,
+
+    /// Loopback upsd port (defaults to host configuration, or 3493).
+    #[arg(long, value_name = "PORT")]
+    pub upsd_port: Option<u16>,
 }
 
 #[derive(Args, Debug, Default)]
-pub struct BatteryArgs {}
+pub struct BatteryArgs {
+    /// UPS name (defaults to the selected host configuration, or `primary`).
+    #[arg(long, value_name = "UPS")]
+    pub ups: Option<String>,
+
+    /// Loopback upsd address (defaults to host configuration, or 127.0.0.1).
+    #[arg(long, value_name = "ADDRESS")]
+    pub upsd_address: Option<String>,
+
+    /// Loopback upsd port (defaults to host configuration, or 3493).
+    #[arg(long, value_name = "PORT")]
+    pub upsd_port: Option<u16>,
+}
 
 #[derive(Args, Debug, Default)]
 pub struct EventsArgs {

@@ -126,7 +126,7 @@ remote host +args:
         status|battery|events|doctor) allowed=1 ;;
         config)
             case "$action" in
-                ""|show|path|render|diff|-h|--help) allowed=1 ;;
+                ""|show|path|diff|-h|--help) allowed=1 ;;
             esac
             ;;
         bios)
@@ -163,6 +163,34 @@ remote host +args:
     ssh -T "{{host}}" mkdir -p ~/.cache/nut-cli
     scp -q "$bin" "{{host}}:.cache/nut-cli/nut"
     ssh -T "{{host}}" ~/.cache/nut-cli/nut "${args[@]}"
+
+# Run status against the checked-in scripted UPS fixture.
+demo:
+    cargo build --locked --bins
+    @set -eu; \
+      setsid cargo run --quiet --locked --bin nut-fake-ups-d -- --listen 127.0.0.1:43493 --fixture examples/fixtures/demo-ups.json & fake=$!; \
+      trap 'kill -TERM -- "-$fake" >/dev/null 2>&1 || true; wait "$fake" >/dev/null 2>&1 || true' EXIT; \
+      for _ in {1..50}; do \
+        if cargo run --quiet --locked --bin nut -- --color never --config examples/demo.toml status --upsd-port 43493 >/dev/null 2>&1; then break; fi; \
+        sleep 0.1; \
+      done; \
+      cargo run --quiet --locked --bin nut -- --config examples/demo.toml status --upsd-port 43493
+
+# Serve the demo fixture on a loopback-only fake upsd.
+fake-upsd fixture="examples/fixtures/demo-ups.json" listen="127.0.0.1:43493":
+    cargo run --locked --bin nut-fake-ups-d -- --listen "{{listen}}" --fixture "{{fixture}}"
+
+# Read status through an SSH tunnel. The host argument is required.
+remote-status host ups="cp1500":
+    bash scripts/remote_ups.sh "{{host}}" status "{{ups}}"
+
+# Read battery data through an SSH tunnel. The host argument is required.
+remote-battery host ups="cp1500":
+    bash scripts/remote_ups.sh "{{host}}" battery "{{ups}}"
+
+# Capture the selected, redacted status fields into a local JSON fixture.
+fixture host output ups="cp1500":
+    bash scripts/remote_ups.sh "{{host}}" fixture "{{ups}}" "{{output}}"
 
 # Render a section banner, using color only on a terminal.
 _banner color label:

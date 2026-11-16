@@ -5,11 +5,14 @@ pub mod cli;
 pub mod config;
 pub mod duration;
 pub mod error;
+pub mod fake_upsd;
 pub mod firmware;
 pub mod host;
 pub mod profiles;
 pub mod render;
+pub mod status;
 pub mod ui;
+pub mod upsd;
 
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -116,14 +119,34 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
             host,
             stdout,
         ),
-        Command::Status(_) => {
+        Command::Status(args) => {
             let _ = bios::write_pending_reminder(host, cli.ascii, stdout)?;
-            Err(NutError::operational(
-                "this command is provided by a later nut phase",
-            ))
+            status::run_status(
+                args,
+                status::OutputOptions {
+                    config_path: cli.config.as_deref(),
+                    json: cli.json,
+                    verbose: cli.verbose,
+                    color: cli.color,
+                    ascii: cli.ascii,
+                },
+                host,
+                stdout,
+            )
         }
-        Command::Battery(_)
-        | Command::Events(_)
+        Command::Battery(args) => status::run_battery(
+            args,
+            status::OutputOptions {
+                config_path: cli.config.as_deref(),
+                json: cli.json,
+                verbose: cli.verbose,
+                color: cli.color,
+                ascii: cli.ascii,
+            },
+            host,
+            stdout,
+        ),
+        Command::Events(_)
         | Command::Beeper(_)
         | Command::Test(_)
         | Command::Notify(_)

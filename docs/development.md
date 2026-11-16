@@ -17,9 +17,9 @@ to enforce this project's `clippy.toml`.
 - `just test` runs tests and doctests without stopping after the first failed binary.
 - `just run *args` runs the crate's `nut` binary.
 - `just remote host *args` copies a release binary to `HOST` over SSH and runs a
-  read-only command (`bios`, `bios guide`, `bios profile`, `config`, `status`,
-  and the other allowlisted verbs). It never runs `bios setup`, `bios attest`,
-  drills, or other write/power actions.
+  read-only command (`bios`, `bios guide`, `bios profile`, `config path/show/diff`,
+  `status`, and the other allowlisted verbs). It refuses `config new/render`,
+  `bios setup`, `bios attest`, drills, and other write/power actions.
 - `just hook-shellcheck` runs ShellCheck on the golden `nut-upssched-cmd` when the tool is installed.
 - `just snap` reviews insta snapshots of rendered NUT files.
 
@@ -27,6 +27,14 @@ CI runs the same format/lint and test recipes on pushes to `main` and pull reque
 Actions are pinned by commit, permissions are read-only, and superseded runs are
 canceled. Tests never require UPS hardware, NUT services, privileges, or network
 access. Dependency acquisition and CI setup may require network access.
+
+`just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
+then runs the real CLI against it. `just fake-upsd` serves the fixture for manual
+experiments. For a deliberate live read, `just remote-status HOST` and
+`just remote-battery HOST` open an SSH tunnel to the target's loopback upsd; the
+required host argument prevents accidental remote access. `just fixture HOST OUTPUT`
+captures only the status fields shown by the CLI into a local JSON file. Set
+`NUT_CONFIG` to a local host TOML file to include its shutdown timer.
 
 SASE exposes `check` as `just check`, with declared gate inputs and toolchain
 fingerprints. After every push, watch the CI run for the exact pushed SHA through

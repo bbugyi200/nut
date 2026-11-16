@@ -1,0 +1,13 @@
+{
+  "ups_name": "demo",
+  "description": "Scripted demo UPS",
+  "variables": {
+    "battery.charge": "100",
+    "battery.runtime": "1550",
+    "input.voltage": "122.0",
+    "ups.beeper.status": "enabled",
+    "ups.load": "28",
+    "ups.status": "OL CHRG",
+    "ups.test.result": "No test initiated"
+  }
+}

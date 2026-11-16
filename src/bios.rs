@@ -922,20 +922,44 @@ mod tests {
     }
 
     #[test]
-    fn status_prints_a_pending_attestation_reminder() {
+    fn status_prints_pending_reminder_and_reads_the_ups() {
+        use crate::fake_upsd::{FakeUpsdFixture, serve_client};
+        use std::collections::BTreeMap;
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let fixture = FakeUpsdFixture {
+            ups_name: "primary".into(),
+            description: "Reminder test".into(),
+            variables: BTreeMap::from([("ups.status".into(), "OL".into())]),
+        };
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            serve_client(stream, &fixture).unwrap();
+        });
         let host = athena_host().with_file(
             "/var/lib/nut-cli/bios/pending.json",
             br#"{"schema_version":1,"profile_id":"asus-prime-trx40-pro","bios_version":"1101","recorded_unix":1}"#,
         );
         let mut out = Vec::new();
         let mut err = Vec::new();
-        let code = run_with_host(["nut", "--ascii"], &host, &mut out, &mut err);
-        assert_eq!(code, 1);
-        assert!(
-            String::from_utf8(out)
-                .unwrap()
-                .contains("BIOS attestation pending")
-        );
-        assert!(String::from_utf8(err).unwrap().contains("later nut phase"));
+        let args = [
+            "nut".to_owned(),
+            "--ascii".into(),
+            "status".into(),
+            "--upsd-address".into(),
+            "127.0.0.1".into(),
+            "--upsd-port".into(),
+            port.to_string(),
+        ];
+        let code = run_with_host(args, &host, &mut out, &mut err);
+        server.join().unwrap();
+        assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
+        let output = String::from_utf8(out).unwrap();
+        assert!(output.contains("BIOS attestation pending"));
+        assert!(output.contains("nut status · primary"));
+        assert!(err.is_empty());
     }
 }
