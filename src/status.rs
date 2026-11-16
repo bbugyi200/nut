@@ -42,6 +42,10 @@ struct StatusDocument {
     timeline: Option<TimelineView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     raw_variables: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_outage: Option<crate::journal::Story>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_battery_since_us: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -101,7 +105,10 @@ pub fn run_status<H: Host, W: Write>(
         host.stdout_is_terminal(),
     );
     loop {
-        let document = fetch_status(host, &connection, args.all)?;
+        let mut document = fetch_status(host, &connection, args.all)?;
+        if connection.port == DEFAULT_UPSD_PORT {
+            add_journal(host, options.config_path, &mut document);
+        }
         if args.watch && !options.json && host.stdout_is_terminal() {
             stdout
                 .write_all(b"\x1b[H\x1b[2J")
@@ -254,7 +261,35 @@ fn fetch_status<H: Host>(
         },
         timeline,
         raw_variables: include_all.then_some(variables),
+        last_outage: None,
+        on_battery_since_us: None,
     })
+}
+
+fn add_journal<H: Host>(host: &H, config_path: Option<&Path>, document: &mut StatusDocument) {
+    let Ok(history) = crate::journal::read(host, &Default::default(), false) else {
+        return;
+    };
+    let boots = crate::journal::boots(host).unwrap_or_default();
+    let notify = crate::events::notify_seconds(host, config_path).unwrap_or(30);
+    let stories = crate::journal::pair(history.entries, &boots, notify);
+    let relevant = |story: &&crate::journal::Story| {
+        story.is_power() && story.ups.as_deref().is_none_or(|ups| ups == document.ups)
+    };
+    let last = stories.iter().rev().find(relevant);
+    if document.status.flags.iter().any(|flag| flag == "OB") {
+        document.on_battery_since_us = last
+            .filter(|story| story.end_us.is_none() && story.incomplete == Some("still on battery"))
+            .and_then(|story| story.start_us);
+    }
+    document.last_outage = last.cloned();
+    if document.status.flags.iter().any(|flag| flag == "OL")
+        && let Some(story) = &mut document.last_outage
+        && story.end_us.is_none()
+        && story.incomplete == Some("still on battery")
+    {
+        story.incomplete = Some("journal ends mid-outage; live UPS is on line");
+    }
 }
 
 fn optional_number(
@@ -415,6 +450,33 @@ fn render_status<W: Write>(
             }
         }
     }
+    if let Some(start) = document.on_battery_since_us {
+        let elapsed = document
+            .observed_at_unix_seconds
+            .saturating_sub(start / 1_000_000);
+        write_label(
+            stdout,
+            "On battery for",
+            &layout::format_duration(Duration::from_secs(elapsed)),
+            ui.width,
+        )?;
+    }
+    if let Some(story) = &document.last_outage {
+        write_history_label(
+            stdout,
+            "Last outage",
+            &format!(
+                "{} · {}",
+                crate::events::time_label(
+                    story.timestamp_us(),
+                    document.observed_at_unix_seconds.saturating_mul(1_000_000),
+                    verbose
+                ),
+                crate::events::summary(story)
+            ),
+            ui.width,
+        )?;
+    }
     if let Some(variables) = &document.raw_variables {
         writeln!(stdout).map_err(output_error)?;
         writeln!(stdout, "Raw NUT variables").map_err(output_error)?;
@@ -486,6 +548,30 @@ fn write_label<W: Write>(
     writeln!(stdout, "{}", layout::label_value(label, value, width)).map_err(output_error)
 }
 
+fn write_history_label<W: Write>(
+    stdout: &mut W,
+    label: &str,
+    value: &str,
+    width: usize,
+) -> Result<(), NutError> {
+    const LABEL_WIDTH: usize = 16;
+    write!(stdout, "{label:<LABEL_WIDTH$}").map_err(output_error)?;
+    let mut column = LABEL_WIDTH;
+    for word in value.split_whitespace() {
+        if column > LABEL_WIDTH && column + word.chars().count() + 1 > width {
+            write!(stdout, "\n{}", " ".repeat(LABEL_WIDTH)).map_err(output_error)?;
+            column = LABEL_WIDTH;
+        }
+        if column > LABEL_WIDTH {
+            write!(stdout, " ").map_err(output_error)?;
+            column += 1;
+        }
+        write!(stdout, "{word}").map_err(output_error)?;
+        column += word.chars().count();
+    }
+    writeln!(stdout).map_err(output_error)
+}
+
 fn output_error(error: std::io::Error) -> NutError {
     NutError::operational(format!("cannot write output: {error}"))
 }
@@ -532,6 +618,57 @@ mod tests {
     use std::collections::BTreeMap;
     use std::net::TcpListener;
     use std::thread;
+
+    #[test]
+    fn journal_summary_is_optional_and_current_battery_start_requires_live_ob() {
+        let host = crate::journal::tests::fixture_host();
+        let mut document = StatusDocument {
+            schema_version: 1,
+            host: None,
+            ups: "primary".into(),
+            upsd_address: "127.0.0.1".into(),
+            upsd_port: 3493,
+            observed_at_unix_seconds: 1_700_000_900,
+            status: StatusView {
+                flags: vec!["OB".into()],
+                summary: "On battery".into(),
+            },
+            battery: BatteryView {
+                charge_percent: None,
+                runtime_seconds: None,
+                test_result: None,
+            },
+            power: PowerView {
+                load_percent: None,
+                input_voltage: None,
+            },
+            timeline: None,
+            raw_variables: None,
+            last_outage: None,
+            on_battery_since_us: None,
+        };
+        add_journal(&host, None, &mut document);
+        assert_eq!(document.on_battery_since_us, Some(1_700_000_700_000_000));
+        assert!(document.last_outage.is_some());
+        let ui = UiContext::new(
+            UiOptions {
+                color: crate::cli::ColorChoice::Never,
+                ascii: true,
+            },
+            &host,
+            false,
+        );
+        let mut text = Vec::new();
+        render_status(&mut text, &document, &ui, false).unwrap();
+        assert!(String::from_utf8(text).unwrap().contains("Last outage"));
+        document.status.flags = vec!["OL".into()];
+        document.on_battery_since_us = None;
+        add_journal(&host, None, &mut document);
+        assert!(document.on_battery_since_us.is_none());
+        document.last_outage = None;
+        add_journal(&FakeHost::default(), None, &mut document);
+        assert!(document.last_outage.is_none());
+    }
 
     #[test]
     fn decodes_status_flags_as_short_sentences() {

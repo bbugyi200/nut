@@ -6,9 +6,11 @@ pub mod completion;
 pub mod config;
 pub mod duration;
 pub mod error;
+pub mod events;
 pub mod fake_upsd;
 pub mod firmware;
 pub mod host;
+pub mod journal;
 pub mod profiles;
 pub mod render;
 pub mod status;
@@ -94,7 +96,7 @@ fn is_root_help(args: &[OsString]) -> bool {
         };
         match argument {
             "--help" | "-h" => help_requested = true,
-            "--ascii" | "--json" | "-j" | "--verbose" => {}
+            "--ascii" | "--json" | "-j" | "--verbose" | "-v" => {}
             "-c" | "--color" | "--config" => {
                 index += 1;
                 if index >= args.len() {
@@ -155,8 +157,19 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<(), 
             stdout,
         ),
         Command::Completion(args) => completion::run(args.action, cli.json, host, stdout),
-        Command::Events(_)
-        | Command::Beeper(_)
+        Command::Events(args) => events::run(
+            args,
+            status::OutputOptions {
+                config_path: cli.config.as_deref(),
+                json: cli.json,
+                verbose: cli.verbose,
+                color: cli.color,
+                ascii: cli.ascii,
+            },
+            host,
+            stdout,
+        ),
+        Command::Beeper(_)
         | Command::Test(_)
         | Command::Notify(_)
         | Command::Init(_)

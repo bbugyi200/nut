@@ -1,0 +1,16 @@
+---
+source: src/events.rs
+expression: output
+---
+nut events
+> 15m ago Blip | 10s | no shutdown recorded
+  Mail: attempted | charge: 100% -> 99%
+> 14m ago Outage | 2m | no shutdown recorded
+  Mail: failed | charge: 100% -> 94%
+> 13m 25s ago Communication lost | 15s | restored
+> 13m 20s ago Journal | driver telemetry resumed
+> 11m 40s ago Replace battery
+> 10m ago Shutdown | 5m 05s | next boot after 2m
+  Mail: attempted | charge: 98% -> 80%
+> 3m 20s ago Outage | still on battery
+  Mail: unknown | charge: 90% -> unknown

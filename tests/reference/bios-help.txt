@@ -19,7 +19,7 @@ Options:
           Use ASCII symbols and bars
   -j, --json
           Emit machine-readable JSON where supported
-      --verbose
+  -v, --verbose
           Include additional diagnostic detail
   -c, --config <PATH>
           Read host settings from this file

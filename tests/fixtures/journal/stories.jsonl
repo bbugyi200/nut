@@ -1,0 +1,19 @@
+{"__REALTIME_TIMESTAMP": "1700000000000000", "__CURSOR": "fixture-0", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on battery", "BATTERY_CHARGE": "100"}
+{"__REALTIME_TIMESTAMP": "1700000010000000", "__CURSOR": "fixture-1", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on line power", "BATTERY_CHARGE": "99"}
+{"__REALTIME_TIMESTAMP": "1700000010000000", "__CURSOR": "fixture-2", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "athena-upssched", "MESSAGE": "online: power restored"}
+{"__REALTIME_TIMESTAMP": "1700000060000000", "__CURSOR": "fixture-3", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on battery", "BATTERY_CHARGE": "100"}
+{"__REALTIME_TIMESTAMP": "1700000090000000", "__CURSOR": "fixture-4", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "athena-upssched", "MESSAGE": "onbatt: on battery"}
+{"__REALTIME_TIMESTAMP": "1700000095000000", "__CURSOR": "fixture-5", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "Communications with UPS primary@localhost lost"}
+{"__REALTIME_TIMESTAMP": "1700000100000000", "__CURSOR": "fixture-6", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upssched", "MESSAGE": "driver telemetry resumed"}
+{"__REALTIME_TIMESTAMP": "1700000110000000", "__CURSOR": "fixture-7", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "Communications with UPS primary@localhost established"}
+{"__REALTIME_TIMESTAMP": "1700000180000000", "__CURSOR": "fixture-8", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on line power", "BATTERY_CHARGE": "94"}
+{"__REALTIME_TIMESTAMP": "1700000181000000", "__CURSOR": "fixture-9", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "nut-upssched", "MESSAGE": "online: power restored"}
+{"__REALTIME_TIMESTAMP": "1700000182000000", "__CURSOR": "fixture-10", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "nut-upssched", "MESSAGE": "mail submission failed for online (exit 75)"}
+{"__REALTIME_TIMESTAMP": "1700000200000000", "__CURSOR": "fixture-11", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost battery needs to be replaced"}
+{"__REALTIME_TIMESTAMP": "1700000300000000", "__CURSOR": "fixture-12", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on battery", "BATTERY_CHARGE": "98"}
+{"__REALTIME_TIMESTAMP": "1700000330000000", "__CURSOR": "fixture-13", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "nut-upssched", "MESSAGE": "onbatt: on battery"}
+{"__REALTIME_TIMESTAMP": "1700000480000000", "__CURSOR": "fixture-14", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "nut-upssched", "MESSAGE": "on battery for 180 s; starting NUT forced shutdown"}
+{"__REALTIME_TIMESTAMP": "1700000481000000", "__CURSOR": "fixture-15", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost: forced shutdown in progress"}
+{"__REALTIME_TIMESTAMP": "1700000482000000", "__CURSOR": "fixture-16", "_BOOT_ID": "boot-a", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "Executing automatic power-fail shutdown"}
+{"__REALTIME_TIMESTAMP": "1700000605000000", "__CURSOR": "fixture-17", "_BOOT_ID": "boot-b", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on line power", "BATTERY_CHARGE": "80"}
+{"__REALTIME_TIMESTAMP": "1700000700000000", "__CURSOR": "fixture-18", "_BOOT_ID": "boot-b", "SYSLOG_IDENTIFIER": "upsmon", "MESSAGE": "UPS primary@localhost on battery", "BATTERY_CHARGE": "90"}

@@ -68,3 +68,13 @@ fn config_show_json_has_schema_version_and_no_secret_fields() {
     assert_eq!(json["host"]["name"], "example-host");
     assert!(output.stdout.windows(8).all(|window| window != b"password"));
 }
+
+#[test]
+fn events_help_matches_reference() {
+    let output = nut(&["events", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/events-help.txt")
+    );
+}

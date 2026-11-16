@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Ship `nut events` with bounded journal JSON reads, outage/blip/shutdown and
+  communication stories, legacy hook continuity, raw/filter/follow modes, and
+  explicit journal-access guidance.
+- Add optional last-outage and current on-battery evidence to local status.
+- Preserve unknown historical charge/mail delivery and incomplete boot/outage
+  sequences; add property tests, redacted fixtures, and width/ASCII snapshots.
+
 - Add DMI-matched board profiles (`asus-prime-trx40-pro` and `generic`), efivar
   fingerprints, a `BiosBackend` trait with manual and firmware-attributes backends,
   and the OS boot-readiness audit.

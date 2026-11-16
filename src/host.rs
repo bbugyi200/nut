@@ -3,7 +3,9 @@ use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+
+mod stream;
 
 use thiserror::Error;
 
@@ -60,6 +62,29 @@ pub trait Host {
     fn list_dir(&self, path: &Path) -> Result<Vec<String>, HostError>;
     fn path_exists(&self, path: &Path) -> Result<bool, HostError>;
     fn run_program(&self, program: &OsStr, args: &[OsString]) -> Result<ProcessOutput, HostError>;
+    /// Read bounded process lines incrementally, with an optional total timeout.
+    fn stream_program(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        timeout: Option<Duration>,
+        line: &mut dyn FnMut(&[u8]) -> Result<(), HostError>,
+    ) -> Result<ProcessOutput, HostError> {
+        let _ = timeout;
+        let output = self.run_program(program, args)?;
+        for bytes in output.stdout.split(|byte| *byte == b'\n') {
+            if bytes.len() > stream::MAX_LINE_BYTES {
+                return Err(HostError::message("process line exceeds 64 KiB"));
+            }
+            if !bytes.is_empty() {
+                line(bytes)?;
+            }
+        }
+        Ok(ProcessOutput {
+            stdout: Vec::new(),
+            ..output
+        })
+    }
     fn now(&self) -> SystemTime;
     fn euid(&self) -> u32;
     fn hostname(&self) -> Result<String, HostError>;
@@ -156,6 +181,16 @@ impl Host for SystemHost {
         })
     }
 
+    fn stream_program(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        timeout: Option<Duration>,
+        line: &mut dyn FnMut(&[u8]) -> Result<(), HostError>,
+    ) -> Result<ProcessOutput, HostError> {
+        stream::run(program, args, timeout, line)
+    }
+
     fn now(&self) -> SystemTime {
         SystemTime::now()
     }
@@ -245,8 +280,6 @@ fn parse_status_euid(bytes: Option<&[u8]>) -> Option<u32> {
 use std::cell::RefCell;
 #[cfg(test)]
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-#[cfg(test)]
-use std::time::Duration;
 
 #[cfg(test)]
 #[derive(Default)]

@@ -10,7 +10,8 @@ read-only `nut status` and `nut battery` commands backed by a bounded RFC 9271
 client that accepts loopback upsd connections only, and `nut bios` (guide, setup,
 attest, and board profiles). `nut config render` can write generated files to a
 selected output directory; it does not apply them to live NUT configuration.
-Remaining commands are reserved for later phases.
+Journal history is available through `nut events`, including outage stories and
+continuous legacy hook history. Remaining commands are reserved for later phases.
 
 ~~~sh
 just check
@@ -32,6 +33,8 @@ See [development](docs/development.md) for the local gate and CI.
 - `nut config diff` compares that rendering with live files, masking secrets. Non-root reads of `/etc/nut` are reported as `contents need root`.
 - `nut status` reads one UPS snapshot; use `--watch`, `--all`, or `--json` as needed.
 - `nut battery` summarizes charge and estimated runtime.
+- `nut events` pairs journal entries into outage, blip, shutdown, and communication stories; use `--follow`, `--raw`, `--outages`, or `--json`.
+  See [journal events](docs/events.md) for access guidance and evidence limits.
 - `nut bios` shows the matched board profile, setting state, boot-readiness audit, and attestation freshness.
 - `nut bios guide` prints a numbered keyboard walkthrough.
 - `nut bios profile list|show|new` lists, prints, or scaffolds a board profile.

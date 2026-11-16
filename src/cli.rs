@@ -27,7 +27,7 @@ pub struct Cli {
     pub json: bool,
 
     /// Include additional diagnostic detail.
-    #[arg(long, global = true)]
+    #[arg(short = 'v', long, global = true)]
     pub verbose: bool,
 
     /// Read host settings from this file.
@@ -127,16 +127,35 @@ pub struct BatteryArgs {
 }
 
 #[derive(Args, Debug, Default)]
+#[command(
+    after_help = "System journal access may require sudo nut events. Optional systemd-journal membership exposes all system logs; nut never changes it automatically."
+)]
 pub struct EventsArgs {
-    /// Include events newer than this duration.
-    #[arg(long, value_name = "DURATION")]
+    /// Include entries since a journalctl time (for example, 'today' or '-2h').
+    #[arg(short = 's', long, value_name = "TIME", allow_hyphen_values = true)]
     pub since: Option<String>,
 
-    /// Follow new events.
-    #[arg(long)]
+    /// Select a boot offset (0 is current, -1 is previous).
+    #[arg(short = 'b', long, value_name = "N", allow_hyphen_values = true)]
+    pub boot: Option<i32>,
+
+    /// Stream new entries and updated stories until interrupted.
+    #[arg(short = 'f', long)]
     pub follow: bool,
 
-    /// Show only the most recent outage.
+    /// Show only power outages, blips, and shutdowns.
+    #[arg(short = 'o', long, conflicts_with = "raw")]
+    pub outages: bool,
+
+    /// Show source journal messages instead of stories.
+    #[arg(short = 'r', long, conflicts_with = "last_outage")]
+    pub raw: bool,
+
+    /// Maximum stories or raw entries to show (1-2000; default 20).
+    #[arg(short = 'n', long, value_name = "COUNT", value_parser = clap::value_parser!(u32).range(1..=2000))]
+    pub limit: Option<u32>,
+
+    /// Show only the most recent outage (alias for --outages --limit 1).
     #[arg(long)]
     pub last_outage: bool,
 }
@@ -381,7 +400,7 @@ pub fn write_root_help<W: std::io::Write>(output: &mut W) -> std::io::Result<()>
     )?;
     writeln!(
         output,
-        "      --verbose            Include additional diagnostic detail"
+        "  -v, --verbose            Include additional diagnostic detail"
     )?;
     Ok(())
 }

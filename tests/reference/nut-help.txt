@@ -29,4 +29,4 @@ Options:
       --color <WHEN>       Color output: auto, always, or never [default: auto]
   -c, --config <PATH>      Read host settings from this file
   -j, --json              Emit machine-readable JSON where supported
-      --verbose            Include additional diagnostic detail
+  -v, --verbose            Include additional diagnostic detail
