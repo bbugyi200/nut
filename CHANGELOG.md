@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Resume interrupted init group creation before observing dependent, still-planned
+  memberships. Started and completed membership checks still reject a missing
+  group; each planned operation is checked when it executes in journal order.
+
 - Finish the docs front door: a committed `just demo` screenshot, quickstart,
   the six safety rules, the command table, and install-on-a-new-machine
   guidance. Add getting-started, design, architecture (Figure 1), and outage

@@ -60,3 +60,9 @@ retains installed distribution packages; recover files with
 - [Getting started](getting-started.md)
 - [Guided recovery drills](drills.md)
 
+Interrupted init recovery preserves the pending journal and original backup. Replay
+uses the original reviewed `--expect-plan` hash and executes recorded operations in
+order. Planned memberships are observed after their group-creation prerequisite;
+started or completed memberships still require the group to exist. Never delete
+the journal to make an interrupted apply look like a new installation.
+

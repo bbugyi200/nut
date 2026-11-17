@@ -1377,6 +1377,13 @@ fn resume_observations<H: Host>(
     let nut_toml = Vec::new();
     let mut out = BTreeMap::new();
     for operation in operations {
+        // Planned resources may depend on earlier operations (for example,
+        // membership in a group whose creation was interrupted). Observe them
+        // when their turn comes in apply_resumed, after those prerequisites.
+        // drive_resource still validates every bound intent before applying it.
+        if operation.checkpoint == CheckpointState::Planned {
+            continue;
+        }
         let id = operation.id.as_str();
         // Bound file operations reconcile from disk; only the never-bound
         // reservation placeholder needs no observation either.
@@ -2713,6 +2720,44 @@ mod tests {
             "svc.client",
             "root.perms"
         ])));
+    }
+
+    #[test]
+    fn recovery_defers_planned_membership_until_group_creation() {
+        use super::super::transaction::{OperationRecovery, ReconciledOperation};
+
+        let host = with_observations(
+            fixture_host()
+                .with_file("/etc/group", b"nut:x:100:\n".to_vec())
+                .with_program_args("getent", ["group", "nut-operators"], out(2, "")),
+            1,
+            ol(),
+        );
+        let observation = collect_observation(&host, None, None);
+        let mut operations = vec![
+            OperationRecovery {
+                id: "group:nut-operators".into(),
+                checkpoint: CheckpointState::Started,
+                observed: ReconciledOperation::NeedsObservation,
+            },
+            OperationRecovery {
+                id: "membership:nut-operators:bryan".into(),
+                checkpoint: CheckpointState::Planned,
+                observed: ReconciledOperation::NeedsObservation,
+            },
+        ];
+        let observed = resume_observations(&host, &observation, &operations)
+            .expect("an unstarted membership must not prevent group recovery");
+        assert_eq!(observed.len(), 1);
+        assert_eq!(observed["group:nut-operators"], digest("group:absent"));
+
+        // Once membership has started, a missing group remains an error.
+        // Do not turn missing prerequisite evidence into a successful read.
+        for checkpoint in [CheckpointState::Started, CheckpointState::Completed] {
+            operations[1].checkpoint = checkpoint;
+            let error = resume_observations(&host, &observation, &operations).unwrap_err();
+            assert!(error.to_string().contains("membership group is missing"));
+        }
     }
 
     #[test]
