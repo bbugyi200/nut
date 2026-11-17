@@ -90,6 +90,36 @@ fn doctor_help_matches_reference() {
 }
 
 #[test]
+fn battery_help_matches_reference() {
+    let output = nut(&["battery", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/battery-help.txt")
+    );
+}
+
+#[test]
+fn beeper_help_matches_reference() {
+    let output = nut(&["beeper", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/beeper-help.txt")
+    );
+}
+
+#[test]
+fn notify_help_matches_reference() {
+    let output = nut(&["notify", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/notify-help.txt")
+    );
+}
+
+#[test]
 fn init_help_matches_reference() {
     let output = nut(&["init", "--help"]);
     assert!(output.status.success());

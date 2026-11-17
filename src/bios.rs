@@ -930,7 +930,7 @@ mod tests {
 
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
-        let fixture = FakeUpsdFixture {
+        let mut fixture = FakeUpsdFixture {
             ups_name: "primary".into(),
             description: "Reminder test".into(),
             variables: BTreeMap::from([("ups.status".into(), "OL".into())]),
@@ -938,7 +938,7 @@ mod tests {
         };
         let server = thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
-            serve_client(stream, &fixture).unwrap();
+            serve_client(stream, &mut fixture).unwrap();
         });
         let host = athena_host().with_file(
             "/var/lib/nut-cli/bios/pending.json",

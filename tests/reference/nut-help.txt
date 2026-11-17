@@ -5,11 +5,10 @@ Usage: nut [OPTIONS] [COMMAND]
 Commands:
 Monitor:
   status       Show UPS status
-  battery      Show battery charge and runtime
+  battery      Show battery charge and runtime, or run a guarded self-test
   events       Show UPS event history
 Act:
   beeper       Show or change the UPS beeper
-  test         Run a guarded battery self-test
   notify       Send or inspect UPS notifications
 Set up:
   init         Plan or apply NUT configuration

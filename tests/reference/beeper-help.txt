@@ -1,0 +1,31 @@
+Show or change the UPS beeper
+
+Usage: nut beeper [OPTIONS] [COMMAND]
+
+Commands:
+  mute
+          Mute the beeper until the next UPS event
+  enable
+          Sound the beeper while an alarm is present
+  disable
+          Silence the beeper entirely
+
+Options:
+      --color <WHEN>
+          Color output policy [default: auto] [possible values: auto, always, never]
+      --ascii
+          Use ASCII symbols and bars
+  -j, --json
+          Emit machine-readable JSON where supported
+      --ups <UPS>
+          UPS name (defaults to the selected host configuration, or `primary`)
+  -v, --verbose
+          Include additional diagnostic detail
+  -c, --config <PATH>
+          Read host settings from this file
+      --upsd-address <ADDRESS>
+          Loopback upsd address (defaults to host configuration, or 127.0.0.1)
+      --upsd-port <PORT>
+          Loopback upsd port (defaults to host configuration, or 3493)
+  -h, --help
+          Print help

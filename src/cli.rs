@@ -51,7 +51,7 @@ pub enum Command {
     #[command(about = "Show UPS status")]
     Status(StatusArgs),
 
-    #[command(about = "Show battery charge and runtime")]
+    #[command(about = "Show battery charge and runtime, or run a guarded self-test")]
     Battery(BatteryArgs),
 
     #[command(about = "Show UPS event history")]
@@ -59,9 +59,6 @@ pub enum Command {
 
     #[command(about = "Show or change the UPS beeper")]
     Beeper(BeeperArgs),
-
-    #[command(about = "Run a guarded battery self-test")]
-    Test(TestArgs),
 
     #[command(about = "Send or inspect UPS notifications")]
     Notify(NotifyArgs),
@@ -113,6 +110,9 @@ pub struct StatusArgs {
 
 #[derive(Args, Debug, Default)]
 pub struct BatteryArgs {
+    #[command(subcommand)]
+    pub action: Option<BatteryAction>,
+
     /// UPS name (defaults to the selected host configuration, or `primary`).
     #[arg(long, value_name = "UPS")]
     pub ups: Option<String>,
@@ -124,6 +124,16 @@ pub struct BatteryArgs {
     /// Loopback upsd port (defaults to host configuration, or 3493).
     #[arg(long, value_name = "PORT")]
     pub upsd_port: Option<u16>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BatteryAction {
+    /// Run a guarded battery self-test on the operator credential.
+    Test {
+        /// Stop a running test instead of starting one.
+        #[arg(long)]
+        stop: bool,
+    },
 }
 
 #[derive(Args, Debug, Default)]
@@ -164,25 +174,28 @@ pub struct EventsArgs {
 pub struct BeeperArgs {
     #[command(subcommand)]
     pub action: Option<BeeperAction>,
+
+    /// UPS name (defaults to the selected host configuration, or `primary`).
+    #[arg(long, value_name = "UPS")]
+    pub ups: Option<String>,
+
+    /// Loopback upsd address (defaults to host configuration, or 127.0.0.1).
+    #[arg(long, value_name = "ADDRESS")]
+    pub upsd_address: Option<String>,
+
+    /// Loopback upsd port (defaults to host configuration, or 3493).
+    #[arg(long, value_name = "PORT")]
+    pub upsd_port: Option<u16>,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum BeeperAction {
+    /// Mute the beeper until the next UPS event.
     Mute,
+    /// Sound the beeper while an alarm is present.
     Enable,
+    /// Silence the beeper entirely.
     Disable,
-}
-
-#[derive(Args, Debug, Default)]
-pub struct TestArgs {
-    #[command(subcommand)]
-    pub action: Option<TestAction>,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum TestAction {
-    Quick,
-    Stop,
 }
 
 #[derive(Args, Debug, Default)]
@@ -193,6 +206,7 @@ pub struct NotifyArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum NotifyAction {
+    /// Send a test notification through the installed event hook.
     Test,
 }
 
@@ -402,7 +416,7 @@ pub enum CompletionAction {
 /// Workflow groups shared by help and completion.
 pub const COMMAND_GROUPS: &[(&str, &[&str])] = &[
     ("Monitor", &["status", "battery", "events"]),
-    ("Act", &["beeper", "test", "notify"]),
+    ("Act", &["beeper", "notify"]),
     ("Set up", &["init", "rollback", "config"]),
     ("Prove", &["doctor", "bios", "drill"]),
     ("Shell", &["completion"]),

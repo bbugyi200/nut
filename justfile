@@ -138,9 +138,32 @@ remote host +args:
     action="${scan[1]:-}"
     extra="${scan[2]:-}"
     allowed=0
+    # True when a write verb appears outside a flag value: `battery --ups test`
+    # reads UPS `test`, while `battery test` and `battery --upsd-port 1 test` act.
+    verb_present() {
+        local verbs=" $1 "
+        shift
+        local prev="" token
+        for token in "$@"; do
+            case "$prev" in
+                --ups|--upsd-address|--upsd-port|--config|-c|-s|-u) prev="$token"; continue ;;
+            esac
+            if [[ "$verbs" == *" $token "* ]]; then
+                return 0
+            fi
+            prev="$token"
+        done
+        return 1
+    }
     case "$subcommand" in
         ""|-h|--help|-V|--version) allowed=1 ;;
-        status|battery|events|doctor) allowed=1 ;;
+        status|events|doctor) allowed=1 ;;
+        battery)
+            # Bare `battery` reads; `battery test` acts on the UPS.
+            if ! verb_present "test" "${scan[@]}"; then
+                allowed=1
+            fi
+            ;;
         config)
             case "$action" in
                 ""|show|path|diff|-h|--help) allowed=1 ;;
@@ -151,7 +174,14 @@ remote host +args:
                 ""|guide|profile|-h|--help) allowed=1 ;;
             esac
             ;;
-        beeper|drill)
+        beeper|notify)
+            # Bare `beeper` and `notify` read; their verbs act, wherever flags sit.
+            if [[ -z "$action" || "$action" == "-h" || "$action" == "--help" ]] \
+                && ! verb_present "mute enable disable test" "${scan[@]}"; then
+                allowed=1
+            fi
+            ;;
+        drill)
             [[ -z "$action" || "$action" == "-h" || "$action" == "--help" ]] && allowed=1
             ;;
         init)

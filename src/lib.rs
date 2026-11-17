@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod actions;
 pub mod bios;
 pub mod cli;
 pub mod completion;
@@ -154,8 +155,41 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32,
             Ok(0)
         }
         Command::Battery(args) => {
-            status::run_battery(
-                args,
+            let options = status::OutputOptions {
+                config_path: cli.config.as_deref(),
+                json: cli.json,
+                verbose: cli.verbose,
+                color: cli.color,
+                ascii: cli.ascii,
+            };
+            match &args.action {
+                Some(crate::cli::BatteryAction::Test { stop }) => {
+                    actions::run_battery_test(*stop, &args, options, host, stdout)?;
+                }
+                None => {
+                    status::run_battery(args, options, host, stdout)?;
+                }
+            }
+            Ok(0)
+        }
+        Command::Beeper(args) => {
+            actions::run_beeper(
+                &args,
+                status::OutputOptions {
+                    config_path: cli.config.as_deref(),
+                    json: cli.json,
+                    verbose: cli.verbose,
+                    color: cli.color,
+                    ascii: cli.ascii,
+                },
+                host,
+                stdout,
+            )?;
+            Ok(0)
+        }
+        Command::Notify(args) => {
+            actions::run_notify(
+                &args,
                 status::OutputOptions {
                     config_path: cli.config.as_deref(),
                     json: cli.json,
@@ -236,9 +270,6 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32,
             host,
             stdout,
         ),
-        Command::Beeper(_) | Command::Test(_) | Command::Notify(_) => Err(NutError::operational(
-            "this command is provided by a later nut phase",
-        )),
     }
 }
 

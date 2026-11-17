@@ -296,6 +296,120 @@ impl UpsdClient {
         }
     }
 
+    /// Authenticate this connection as `user`. The caller must never log `password`.
+    pub fn login(&mut self, user: &str, password: &str) -> Result<(), UpsdError> {
+        validate_token(user, 64)
+            .map_err(|()| UpsdError::Protocol(format!("invalid username: {user:?}")))?;
+        validate_password(password)?;
+        self.write_command(&format!("USERNAME {}", quote_arg(user)))?;
+        expect_ok(self.read_response_line()?, "USERNAME")?;
+        self.write_command(&format!("PASSWORD {}", quote_arg(password)))?;
+        expect_ok(self.read_response_line()?, "PASSWORD")?;
+        Ok(())
+    }
+
+    /// Enable or disable server-side tracking of INSTCMD and SET VAR.
+    /// Returns the activation state the server reports (`GET TRACKING`).
+    pub fn set_tracking(&mut self, enabled: bool) -> Result<bool, UpsdError> {
+        self.write_command(if enabled {
+            "SET TRACKING ON"
+        } else {
+            "SET TRACKING OFF"
+        })?;
+        expect_ok(self.read_response_line()?, "SET TRACKING")?;
+        self.tracking_enabled()
+    }
+
+    /// Report whether the server currently tracks commands for this connection.
+    pub fn tracking_enabled(&mut self) -> Result<bool, UpsdError> {
+        self.write_command("GET TRACKING")?;
+        match self.read_response_line()?.as_str() {
+            "ON" => Ok(true),
+            "OFF" => Ok(false),
+            other => Err(UpsdError::Protocol(format!(
+                "expected ON or OFF for GET TRACKING, received {other:?}"
+            ))),
+        }
+    }
+
+    /// Send an instant command. With tracking enabled the server replies
+    /// `OK TRACKING <id>` and the id is returned; otherwise `None` is returned.
+    /// This client never sends power-cutting commands; the allowlist lives in
+    /// upsd.users and is enforced by the server.
+    pub fn instcmd(&mut self, command: &str) -> Result<Option<String>, UpsdError> {
+        validate_token(command, 64).map_err(|()| {
+            UpsdError::Protocol(format!("invalid instant command name: {command:?}"))
+        })?;
+        self.write_command(&format!("INSTCMD {} {command}", self.ups))?;
+        let line = self.read_response_line()?;
+        if let Some(error) = parse_server_error(&line) {
+            return Err(error);
+        }
+        if line == "OK" {
+            return Ok(None);
+        }
+        if let Some(id) = line.strip_prefix("OK TRACKING ") {
+            validate_tracking_id(id)?;
+            return Ok(Some(id.to_owned()));
+        }
+        Err(UpsdError::Protocol(format!(
+            "expected OK or OK TRACKING <id> for INSTCMD, received {line:?}"
+        )))
+    }
+
+    /// Poll the outcome of a tracked instant command.
+    pub fn get_tracking(&mut self, id: &str) -> Result<TrackingState, UpsdError> {
+        validate_tracking_id(id)?;
+        self.write_command(&format!("GET TRACKING {id}"))?;
+        let line = self.read_response_line()?;
+        match line.as_str() {
+            "PENDING" => Ok(TrackingState::Pending),
+            "SUCCESS" => Ok(TrackingState::Success),
+            _ => match parse_server_error(&line) {
+                Some(UpsdError::Server { code, message }) => {
+                    Ok(TrackingState::Failed(format_server_error(&code, &message)))
+                }
+                Some(error) => Err(error),
+                None => Err(UpsdError::Protocol(format!(
+                    "expected PENDING, SUCCESS, or ERR for GET TRACKING, received {line:?}"
+                ))),
+            },
+        }
+    }
+
+    /// Read one variable. Returns `None` when the server reports UNKNOWN-VAR.
+    pub fn get_var(&mut self, name: &str) -> Result<Option<String>, UpsdError> {
+        if !is_valid_var_name(&name.to_ascii_lowercase()) || name.len() > 63 {
+            return Err(UpsdError::Protocol(format!(
+                "invalid variable name: {name:?}"
+            )));
+        }
+        self.write_command(&format!("GET VAR {} {name}", self.ups))?;
+        let line = self.read_response_line()?;
+        match parse_server_error(&line) {
+            Some(UpsdError::Server { code, .. }) if code == "UNKNOWN-VAR" => Ok(None),
+            Some(error) => Err(error),
+            None => {
+                let (ups, var, value) = parse_var_response(&line)?;
+                if !ups.eq_ignore_ascii_case(&self.ups) || var != name {
+                    return Err(UpsdError::Protocol(format!(
+                        "GET VAR response does not match the request: {line:?}"
+                    )));
+                }
+                Ok(Some(value))
+            }
+        }
+    }
+
+    /// End the session politely. Failures are ignored: closing the connection
+    /// already discards the server-side session state.
+    pub fn logout(&mut self) {
+        if self.write_command("LOGOUT").is_err() {
+            return;
+        }
+        let _ = self.read_response_line();
+    }
+
     fn write_command(&mut self, command: &str) -> Result<(), UpsdError> {
         if command.len() > 256 || command.contains(['\n', '\r']) {
             return Err(UpsdError::Protocol(
@@ -357,6 +471,100 @@ fn resolve_loopback(address: &str, port: u16) -> Result<Vec<SocketAddr>, UpsdErr
         return Err(UpsdError::NonLoopbackAddress(address.to_owned()));
     }
     Ok(resolved)
+}
+
+/// Outcome of one `GET TRACKING <id>` poll.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TrackingState {
+    Pending,
+    Success,
+    Failed(String),
+}
+
+/// Quote one protocol argument: bare when it is a safe token, otherwise
+/// double-quoted with backslash escapes (the inverse of `parse_quoted_value`).
+pub fn quote_arg(value: &str) -> String {
+    let bare_ok = !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'.' | b'_' | b'-' | b'/' | b'@' | b':' | b'+')
+        });
+    if bare_ok {
+        return value.to_owned();
+    }
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        if ch == '"' || ch == '\\' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out.push('"');
+    out
+}
+
+fn expect_ok(line: String, command: &str) -> Result<(), UpsdError> {
+    if let Some(error) = parse_server_error(&line) {
+        return Err(error);
+    }
+    if line == "OK" {
+        Ok(())
+    } else {
+        Err(UpsdError::Protocol(format!(
+            "expected OK for {command}, received {line:?}"
+        )))
+    }
+}
+
+fn format_server_error(code: &str, message: &str) -> String {
+    if message.is_empty() {
+        format!("ERR {code}")
+    } else {
+        format!("ERR {code} {message}")
+    }
+}
+
+fn validate_token(value: &str, max_length: usize) -> Result<(), ()> {
+    if !value.is_empty()
+        && value.len() <= max_length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+    {
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
+fn validate_password(password: &str) -> Result<(), UpsdError> {
+    if password.is_empty() {
+        return Err(UpsdError::Protocol("password value is missing".into()));
+    }
+    if password.len() > 512 {
+        return Err(UpsdError::Protocol("password value is too long".into()));
+    }
+    if password.bytes().any(|byte| byte < 0x20 || byte == 0x7f) {
+        return Err(UpsdError::Protocol(
+            "password value contains a control character".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_tracking_id(id: &str) -> Result<(), UpsdError> {
+    if !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+    {
+        Ok(())
+    } else {
+        Err(UpsdError::Protocol(format!("invalid tracking id: {id:?}")))
+    }
 }
 
 fn validate_ups_name(ups: &str) -> Result<(), UpsdError> {
@@ -539,6 +747,26 @@ mod tests {
         assert!(parse_quoted_value("unquoted").is_err());
         assert!(parse_quoted_value("\"unterminated").is_err());
         assert!(parse_quoted_value("\"line\nfeed\"").is_err());
+    }
+
+    #[test]
+    fn quoted_args_round_trip_through_the_value_parser() {
+        assert_eq!(quote_arg("nut-operator"), "nut-operator");
+        assert_eq!(quote_arg("abc123"), "abc123");
+        assert_eq!(quote_arg("p@ss:w/x.y-z+a"), "p@ss:w/x.y-z+a");
+        assert_eq!(
+            quote_arg("1bd31808-cb49-4aec-9d75-d056e6f018d2"),
+            "1bd31808-cb49-4aec-9d75-d056e6f018d2"
+        );
+        for value in ["pass word", "say \"hi\" \\ ok"] {
+            let encoded = quote_arg(value);
+            assert!(encoded.starts_with('"'), "{encoded}");
+            assert_eq!(parse_quoted_value(&encoded).unwrap(), value);
+        }
+        assert!(validate_tracking_id("1bd31808-cb49-4aec-9d75-d056e6f018d2").is_ok());
+        assert!(validate_tracking_id("has space").is_err());
+        assert!(validate_password("").is_err());
+        assert!(validate_password("line\nbreak").is_err());
     }
 
     #[test]

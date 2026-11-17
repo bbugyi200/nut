@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Authenticate UPS actions on the least-privilege operator credential:
+  `nut beeper [mute|enable|disable]` shows or changes the beeper and confirms
+  the new `ups.beeper.status`, `nut battery test [--stop]` runs or aborts a
+  guarded quick self-test behind an interactive terminal and a `[y/N]`
+  confirmation with Ctrl-C sending `test.battery.stop`, and `nut notify [test]`
+  shows recipients and recent hook events or runs the hook's `test-notify`
+  event. The client speaks `USERNAME`/`PASSWORD` with `SET TRACKING ON` and
+  polls `GET TRACKING`, and a submission timeout stays "outcome unknown"
+  without retrying. Secrets never reach argv, logs, or JSON. The e2e job
+  proves the stanza allowlist, the live `load.off`/`shutdown.return`
+  refusals, the driver-boundary beeper admission, the terminal interlock, and
+  the notify test mail.
 - Run the dummy-ups e2e job for real: build the locked release binary as the
   unprivileged runner and pass it to the root harness through `NUT_E2E_BIN`,
   calling `just` by absolute path because sudo's `secure_path` hid it.

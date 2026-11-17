@@ -75,12 +75,12 @@ struct TimelineView {
 }
 
 #[derive(Clone, Debug)]
-struct Connection {
-    host: Option<String>,
-    ups: String,
-    address: String,
-    port: u16,
-    shutdown_after: Option<DurationValue>,
+pub(crate) struct Connection {
+    pub(crate) host: Option<String>,
+    pub(crate) ups: String,
+    pub(crate) address: String,
+    pub(crate) port: u16,
+    pub(crate) shutdown_after: Option<DurationValue>,
 }
 
 pub fn run_status<H: Host, W: Write>(
@@ -165,7 +165,7 @@ pub fn run_battery<H: Host, W: Write>(
     render_battery(stdout, &document, &ui)
 }
 
-fn resolve_connection<H: Host>(
+pub(crate) fn resolve_connection<H: Host>(
     host: &H,
     override_path: Option<&Path>,
     ups_override: Option<&str>,
@@ -697,7 +697,7 @@ mod tests {
     fn status_json_uses_scripted_upsd_and_configured_shutdown_timeline() {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
-        let fixture = FakeUpsdFixture {
+        let mut fixture = FakeUpsdFixture {
             ups_name: "demo".into(),
             description: "Scripted demo UPS".into(),
             variables: BTreeMap::from([
@@ -710,7 +710,7 @@ mod tests {
         };
         let server = thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
-            serve_client(stream, &fixture).unwrap();
+            serve_client(stream, &mut fixture).unwrap();
         });
         let config = "schema = 1\n\n[host]\nname = \"demo\"\n\n[ups.demo]\nprofile = \"dummy\"\n\n[shutdown]\nnotify_after = \"30s\"\nearly_after = \"180s\"\npoweroff_wait = \"30m\"\nshutdown_budget = \"2m\"\n\n[notify]\nfrom = \"root@example.invalid\"\nto = \"operator@example.invalid\"\ncommbad_after = \"60s\"\n";
         let host = FakeHost::default()

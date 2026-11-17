@@ -586,6 +586,103 @@ PY
     cat "$SNAP_DIR/packages.txt"
 }
 
+# The operator allowlist is proved three ways: the rendered upsd.users stanza
+# carries exactly the beeper/test commands, the live operator credential is
+# refused power commands, and an allowed command reaches the driver. Dummy-ups
+# in Dummy Mode implements no instant commands, so "reaches the driver" means
+# upsd answers CMD-NOT-SUPPORTED rather than ACCESS-DENIED.
+assert_operator_acl() {
+    python3 - <<'PY'
+from pathlib import Path
+lines = Path("/etc/nut/upsd.users").read_text().splitlines()
+in_operator, instcmds, stanzas = False, [], []
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        in_operator = stripped == "[nut-operator]"
+        stanzas.append(stripped)
+    elif in_operator and stripped.startswith("instcmds"):
+        instcmds.append(stripped.split("=", 1)[1].strip())
+if "[nut-operator]" not in stanzas:
+    raise SystemExit("upsd.users has no [nut-operator] stanza")
+want = {
+    "beeper.disable",
+    "beeper.enable",
+    "beeper.mute",
+    "test.battery.start.quick",
+    "test.battery.stop",
+}
+if set(instcmds) != want or len(instcmds) != len(want):
+    raise SystemExit(f"operator allowlist is not exactly the beeper/test set: {instcmds}")
+blob = "\n".join(lines)
+if "instcmds = ALL" in blob or "instcmds = load" in blob or "shutdown" in blob.split("[nut-operator]")[1]:
+    raise SystemExit("operator stanza grants more than beeper/test commands")
+print("operator allowlist is exactly beeper.* + quick test/stop")
+PY
+}
+
+# Run one instant command as the operator and report the lowercased refusal.
+operator_probe() {
+    local secret=$1
+    shift
+    local out
+    if out=$(upscmd -u nut-operator -p "$secret" dummy "$@" 2>&1); then
+        fail "upscmd $* unexpectedly succeeded: $out"
+    fi
+    printf '%s' "$out" | tr '[:upper:]' '[:lower:]'
+}
+
+run_actions_proofs() {
+    log "operator allows beeper/test, refuses power commands"
+    command -v upscmd >/dev/null || fail "upscmd is missing; nut-client did not install"
+    assert_operator_acl
+    local secret lowered
+    secret=$(cat /etc/nut-cli/operator.secret)
+    [[ -n $secret ]] || fail "operator secret is empty"
+    # Allowed command reaches the driver: auth and the ACL pass, then the
+    # driverless dummy-ups refuses the command itself.
+    lowered=$(operator_probe "$secret" beeper.mute)
+    [[ $lowered == *support* ]] || fail "beeper.mute refusal does not name support: $lowered"
+    [[ $lowered != *denied* ]] || fail "beeper.mute was denied by the ACL: $lowered"
+    log "operator reached the driver: $lowered"
+    # Power commands never reach the driver: the ACL refuses them first. Where
+    # dummy-ups reports the command unsupported first, the stanza assertion
+    # above is the ACL proof and the probe only records the refusal.
+    for cmd in load.off shutdown.return; do
+        lowered=$(operator_probe "$secret" "$cmd")
+        if [[ $lowered == *denied* ]]; then
+            log "operator refused $cmd: access denied"
+        elif [[ $lowered == *support* ]]; then
+            log "operator refused $cmd at the driver ($lowered); ACL proof is the stanza assertion"
+        else
+            fail "unexpected $cmd refusal: $lowered"
+        fi
+    done
+    unset secret
+    # The nut CLI speaks the same protocol: bare beeper reads, verbs reach the
+    # driver refusal, notify test submits mail, and the test needs a terminal.
+    "$NUT_BIN" --config "$CONFIG" beeper | grep -qi "not reported" \
+        || fail "nut beeper did not report the missing beeper variable gracefully"
+    if out=$("$NUT_BIN" --config "$CONFIG" beeper mute 2>&1); then
+        fail "nut beeper mute unexpectedly succeeded: $out"
+    fi
+    [[ $out == *"does not support"* ]] || fail "nut beeper mute refusal is not the driver: $out"
+    log "nut beeper mute reached the driver refusal"
+    if out=$("$NUT_BIN" --config "$CONFIG" battery test --stop </dev/null 2>&1); then
+        fail "nut battery test ran without a terminal: $out"
+    fi
+    [[ $out == *"interactive terminal"* ]] || fail "battery test refusal is not the terminal interlock: $out"
+    log "nut battery test refuses to run without a terminal"
+    : >"$MAIL_LOG"
+    "$NUT_BIN" --config "$CONFIG" notify test | tee "$DIAG_DIR/notify-test.txt" | redact
+    grep -qi "test notification" "$MAIL_LOG" \
+        || fail "notify test did not submit mail through the hook"
+    log "notify test submitted mail through the hook"
+    "$NUT_BIN" --config "$CONFIG" notify | tee "$DIAG_DIR/notify.txt" | redact | grep -qi "operator@example.invalid" \
+        || fail "nut notify did not show the recipients"
+    log "nut notify shows recipients"
+}
+
 run_isolated_yes() {
     log "isolated root init --yes fixture"
     "$NUT_BIN" --json --config "$CONFIG" init --yes | tee "$DIAG_DIR/isolated-yes.json" | redact
@@ -658,6 +755,7 @@ main() {
     assert_acl
     doctor_ok
     second_init_noop
+    run_actions_proofs
 
     local stamp
     stamp=$(json_get backup_stamp <"$DIAG_DIR/init.json")

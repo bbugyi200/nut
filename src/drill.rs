@@ -1289,7 +1289,7 @@ mod tests {
     fn start_saves_evidence_before_showing_manual_power_steps() {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
-        let fixture = FakeUpsdFixture {
+        let mut fixture = FakeUpsdFixture {
             ups_name: "cp1500".into(),
             description: "Test UPS".into(),
             variables: BTreeMap::from([
@@ -1301,7 +1301,7 @@ mod tests {
         };
         let server = thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
-            serve_client(stream, &fixture).unwrap();
+            serve_client(stream, &mut fixture).unwrap();
         });
         let host = FakeHost::default()
             .with_euid(0)

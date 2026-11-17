@@ -21,7 +21,7 @@ pub use converge::{ConvergeError, ConvergeOptions, ConvergeReport, converge};
 
 pub use hash::plan_hash;
 pub use observe::{FileState, Observation, ObservationError, collect};
-pub use observe::{PENDING_PATH, STATE_PATH};
+pub use observe::{OPERATOR_SECRET_PATH, PENDING_PATH, STATE_PATH};
 pub use plan::{Plan, PlanOptions, PlanStep, PlanStepKind, PlanView, plan};
 pub use secrets::{
     escape_nut_secret, fingerprint_secret, parse_monitor_password, parse_nut_secret_value,

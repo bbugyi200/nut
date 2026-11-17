@@ -37,6 +37,9 @@ See [development](docs/development.md) for the local gate and CI.
 - `nut config diff` compares that rendering with live files, masking secrets. Non-root reads of `/etc/nut` are reported as `contents need root`.
 - `nut status` reads one UPS snapshot; use `--watch`, `--all`, or `--json` as needed.
 - `nut battery` summarizes charge and estimated runtime.
+- `nut beeper [mute|enable|disable]` shows or changes the beeper on the least-privilege operator credential; verbs confirm the new state.
+- `nut battery test [--stop]` runs or aborts a guarded quick self-test; it needs an interactive terminal and a `[y/N]` confirmation, and agents cannot run it.
+- `nut notify [test]` shows notification recipients and recent hook events, or sends a test notification through the installed hook. See [authenticated actions](docs/actions.md).
 - `nut events` pairs journal entries into outage, blip, shutdown, and communication stories; use `--follow`, `--raw`, `--outages`, or `--json`.
   See [journal events](docs/events.md) for access guidance and evidence limits.
 - `nut bios` shows the matched board profile, setting state, boot-readiness audit, and attestation freshness.
