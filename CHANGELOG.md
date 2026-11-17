@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rebuild zsh completion menus around clap's public API: grouped `── name ──`
+  headers in bold cyan, merged `--long  -s` rows, a description on every
+  row, and a one-line hint instead of a silent empty menu. Protocol 1 is
+  unchanged. Run `nut completion install` and then `exec zsh` so the new
+  adapter is loaded.
 - Retry `EINTR` (`Interrupted`) while reading upsd response lines so a
   stop/continue or cgroup freeze no longer fails `status`, `doctor`, and `init`
   with "Interrupted system call".

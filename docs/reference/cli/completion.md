@@ -17,9 +17,9 @@ Commands:
   uninstall
           Remove adapters whose bytes still match the recorded manifest
   zsh
-
+          Print the zsh adapter for manual installation
   bash
-
+          Print the bash adapter for manual installation
 
 Options:
       --color <WHEN>
@@ -47,7 +47,7 @@ Usage: nut completion install [OPTIONS] [SHELL]
 
 Arguments:
   [SHELL]
-          [possible values: zsh, bash]
+          Shell to install. Defaults to the current `$SHELL` [possible values: zsh, bash]
 
 Options:
       --color <WHEN>
@@ -105,13 +105,13 @@ Usage: nut completion uninstall [OPTIONS] [SHELL]
 
 Arguments:
   [SHELL]
-          [possible values: zsh, bash]
+          Shell to remove. Defaults to the current `$SHELL` [possible values: zsh, bash]
 
 Options:
       --color <WHEN>
           Color output policy [default: auto] [possible values: auto, always, never]
   -n, --dry-run
-
+          Preview without removing files
       --ascii
           Use ASCII symbols and bars
   -j, --json
@@ -126,9 +126,11 @@ Options:
 
 ## nut completion zsh
 
-
+Print the zsh adapter for manual installation
 
 ```text
+Print the zsh adapter for manual installation
+
 Usage: nut completion zsh [OPTIONS]
 
 Options:
@@ -148,9 +150,11 @@ Options:
 
 ## nut completion bash
 
-
+Print the bash adapter for manual installation
 
 ```text
+Print the bash adapter for manual installation
+
 Usage: nut completion bash [OPTIONS]
 
 Options:

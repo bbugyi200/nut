@@ -336,7 +336,20 @@ fn capture_demo_status(root: &Path) -> String {
         "demo status failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    normalize_text(&String::from_utf8(output.stdout).expect("demo status is UTF-8"))
+    let text = normalize_text(&String::from_utf8(output.stdout).expect("demo status is UTF-8"));
+    // Pending BIOS/drill reminders read /var/lib/nut-cli and appear on a
+    // non-root athena capture. The committed demo is the UPS status view.
+    let filtered = text
+        .lines()
+        .filter(|line| {
+            !line.contains("BIOS evidence needs root")
+                && !line.contains("Drill evidence needs root")
+                && !line.contains("BIOS attestation pending")
+                && !line.contains("Drill report pending")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    normalize_text(&filtered)
 }
 
 fn sync_file(path: &Path, expected: &str, update: bool) {

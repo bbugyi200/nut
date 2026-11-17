@@ -42,6 +42,7 @@ fn complete(words: &[&str]) -> String {
 fn protocol_tree_groups_flags_values_and_paths() {
     let root = complete(&["nut", ""]);
     for (group, commands) in nut_cli::cli::COMMAND_GROUPS {
+        let group = group.to_lowercase();
         for command in *commands {
             assert!(
                 root.lines()
@@ -52,6 +53,11 @@ fn protocol_tree_groups_flags_values_and_paths() {
         }
     }
     assert!(!root.contains("__complete"));
+    assert!(
+        root.lines().all(|line| line.starts_with('!')
+            || !line.split('\t').next().unwrap_or_default().starts_with('-')),
+        "root empty word offered options: {root}"
+    );
     assert!(complete(&["nut", "status", "--"]).contains("--ups\t"));
     assert!(complete(&["nut", "status", "-"]).contains("-c\t"));
     assert!(complete(&["nut", "--color", "a"]).contains("always\t"));
@@ -129,7 +135,15 @@ fn malformed_skew_and_read_only_failures() {
             "",
         ],
     );
-    assert!(output.status.success() && output.stdout.is_empty() && output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && output.stderr.is_empty(),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("!message upsd at 192.0.2.1:3493 did not answer"),
+        "{stdout}"
+    );
     let output = nut(
         home.path(),
         &[
@@ -143,7 +157,15 @@ fn malformed_skew_and_read_only_failures() {
             "--ups=",
         ],
     );
-    assert!(output.status.success() && output.stdout.is_empty() && output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && output.stderr.is_empty(),
+        "{stdout}"
+    );
+    assert!(
+        stdout.starts_with("!prefix 6\n!message upsd at 192.0.2.1:3493 did not answer"),
+        "{stdout}"
+    );
     assert_eq!(fs::read_dir(home.path()).unwrap().count(), 0);
 }
 
@@ -163,7 +185,10 @@ fn live_ups_provider_uses_only_list_ups_and_handles_quoted_description() {
     let output = complete(&["nut", "battery", "--upsd-port", &port, "--ups="]);
     server.join().unwrap();
     assert!(output.starts_with("!prefix 6\n"));
-    assert!(output.contains("lab\tLab \"UPS\"\tups\tspace"), "{output}");
+    assert!(
+        output.contains("lab\tLab \"UPS\"\tUPS devices\tspace"),
+        "{output}"
+    );
     assert!(output.contains("spare\tStandby"));
 }
 
@@ -334,12 +359,44 @@ fn zsh_compinit_and_grouped_described_candidates() {
         .unwrap();
     let output = success(output);
     assert!(
-        output.contains("group:Monitor") && output.contains("status:Show UPS status"),
+        output.contains("group:monitor") && output.contains("status:Show UPS status"),
         "{output}"
     );
     assert!(
-        output.contains("group:Set up") && output.contains("group:Prove"),
+        output.contains("group:set up") && output.contains("group:prove"),
         "{output}"
+    );
+
+    let paired = Command::new("zsh")
+        .args([
+            "-fc",
+            r#"
+        fpath=("$1" $fpath); autoload -Uz compinit; compinit -D -i
+        _describe() { local name=$5; print -r -- "group:$4"; print -rl -- "${(@P)name}"; }
+        words=(nut status '-'); CURRENT=3; PREFIX='-'; SUFFIX=''; curcontext=':complete:nut:'
+        _nut
+    "#,
+            "test",
+        ])
+        .arg(home.path())
+        .env("HOME", home.path())
+        .env(
+            "PATH",
+            format!(
+                "{}:/usr/bin:/bin",
+                Path::new(NUT).parent().unwrap().display()
+            ),
+        )
+        .output()
+        .unwrap();
+    let paired = success(paired);
+    let options = paired
+        .split("group:")
+        .find(|chunk| chunk.starts_with("options"));
+    let options = options.unwrap_or(&paired);
+    assert!(
+        options.contains("-h:Print help") && options.contains("--help:Print help"),
+        "{paired}"
     );
 }
 
@@ -365,4 +422,339 @@ fn install_smoke_all_visible_help() {
         }
     }
     walk(&nut_cli::cli::Cli::command(), &[]);
+}
+
+const ZSH_GOLDEN: &str = "tests/reference/zsh-completion.txt";
+const GOLDENS_ENV: &str = "NUT_UPDATE_GOLDENS";
+
+fn have_zsh() -> bool {
+    Command::new("zsh")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn strip_ansi_and_cr(text: &str) -> String {
+    let mut out = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            match chars.peek() {
+                Some('[') => {
+                    chars.next();
+                    for next in chars.by_ref() {
+                        if next.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    chars.next();
+                    for next in chars.by_ref() {
+                        if next == '\u{7}' || next == '\u{1b}' {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+        if ch == '\u{8}' {
+            out.pop();
+            continue;
+        }
+        if ch != '\r' && ch != '\u{7}' {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn trim_command_echo(line: &str) -> String {
+    let line = line.trim_end();
+    let Some(split) = line.find(" -- ") else {
+        return line.to_owned();
+    };
+    let (left, right) = line.split_at(split + 4);
+    if let Some(pos) = right.find("nut") {
+        let description = right[..pos].trim_end();
+        if !description.is_empty() {
+            return format!("{left}{description}");
+        }
+    }
+    line.to_owned()
+}
+
+fn extract_menu(raw: &str) -> String {
+    let stripped = strip_ansi_and_cr(raw);
+    let lines: Vec<&str> = stripped.lines().map(str::trim_end).collect();
+    let Some(start) = lines.iter().position(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("── ") || trimmed.starts_with("== ")
+    }) else {
+        return stripped;
+    };
+    let mut end = start;
+    for (index, line) in lines.iter().enumerate().skip(start) {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("── ")
+            || trimmed.starts_with("== ")
+            || trimmed.contains(" -- ")
+            || trimmed.is_empty()
+        {
+            end = index;
+            continue;
+        }
+        break;
+    }
+    while end > start && lines[end].is_empty() {
+        end -= 1;
+    }
+    let body: Vec<String> = lines[start..=end]
+        .iter()
+        .map(|line| trim_command_echo(line))
+        .collect();
+    let mut text = body.join("\n");
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text
+}
+
+fn output_with_deadline(mut command: Command, deadline: Duration) -> std::io::Result<Output> {
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+    let mut child = command.spawn()?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait()? {
+            Some(_) => return child.wait_with_output(),
+            None if started.elapsed() > deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "zpty deadline exceeded",
+                ));
+            }
+            None => std::thread::sleep(Duration::from_millis(20)),
+        }
+    }
+}
+
+fn run_zpty(home: &Path, extra_env: &[(&str, &str)]) -> Option<(String, String)> {
+    if !have_zsh() {
+        println!("skipped: zsh not found on PATH");
+        return None;
+    }
+    fs::write(
+        home.join("_nut"),
+        success(nut(home, &["completion", "zsh"])),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(NUT, home.join("nut")).unwrap();
+    fs::write(home.join("driver.zsh"), ZPTY_DRIVER).unwrap();
+    let mut command = Command::new("zsh");
+    command.arg("-f").arg(home.join("driver.zsh")).arg(home);
+    command.env("HOME", home);
+    command.env("TERM", "xterm-256color");
+    command.env("PATH", format!("{}:/usr/bin:/bin", home.display()));
+    command.env_remove("ZDOTDIR");
+    command.env_remove("NO_COLOR");
+    command.env_remove("CLICOLOR_FORCE");
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
+    let output = match output_with_deadline(command, Duration::from_secs(30)) {
+        Ok(output) => output,
+        Err(error) => panic!("zpty readiness deadline exceeded: {error}"),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    if stdout.contains("ZPTY-MISSING") {
+        println!("skipped: zsh/zpty not usable on this host");
+        return None;
+    }
+    assert!(
+        output.status.success(),
+        "zpty driver failed, stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    Some((stdout, stderr))
+}
+
+fn section<'a>(stdout: &'a str, name: &str) -> &'a str {
+    let start = format!("BEGIN {name}\n");
+    let end = format!("\nEND {name}");
+    let from = stdout
+        .find(&start)
+        .unwrap_or_else(|| panic!("missing {start:?} in {stdout}"));
+    let rest = &stdout[from + start.len()..];
+    let to = rest
+        .find(&end)
+        .unwrap_or_else(|| panic!("missing {end:?} in {stdout}"));
+    &rest[..to]
+}
+
+const ZPTY_DRIVER: &str = r#"
+zmodload zsh/zpty || { print "ZPTY-MISSING"; exit 2 }
+zmodload zsh/zselect || { print "ZSELECT-MISSING"; exit 2 }
+TMP=$1
+typeset -i deadline=$((SECONDS + 20))
+typeset -i sync_count=0
+READ_RESULT=
+PTY_FD=
+wait_for() {
+  local expected=$1 remaining chunk
+  READ_RESULT=
+  while true; do
+    if chunk=$(zpty -rt pb); then
+      READ_RESULT+=$chunk
+      if [[ $READ_RESULT == *"$expected"* ]]; then
+        return 0
+      fi
+    fi
+    remaining=$((deadline - SECONDS))
+    (( remaining > 0 )) || { print -r -- "READINESS TIMEOUT: $READ_RESULT"; return 1; }
+    zselect -t 10 "$PTY_FD" || true
+  done
+}
+reset_line() {
+  (( sync_count += 1 ))
+  zpty -w -n pb $'\x15'
+  zpty -w pb "print -r -- SY''NC-$sync_count"
+  wait_for "SYNC-$sync_count"
+}
+export PATH="$TMP:$PATH"
+zpty -d pb 2>/dev/null
+zpty -b pb zsh -f
+PTY_FD=$REPLY
+zpty -w pb "PS1='ZP> '; bindkey -e; LISTMAX=1000; setopt nolistbeep"
+zpty -w pb "stty cols 100 rows 40"
+zpty -w pb "fpath=($TMP \$fpath)"
+zpty -w pb "autoload -Uz compinit && compinit -D -i && print -r -- COMPINIT-DONE"
+wait_for COMPINIT-DONE || { print -r -- "SETUP-READ-FAILED"; zpty -d pb; exit 1 }
+print -r -- "SETUP OK"
+zpty -w -n pb $'nut \t'
+if wait_for monitor; then
+  print -r -- "BEGIN root"
+  print -r -- "$READ_RESULT"
+  print -r -- "END root"
+else
+  print -r -- "ROOT MISS"
+fi
+reset_line || { print -r -- "PROMPT-READ-FAILED"; zpty -d pb; exit 1 }
+zpty -w -n pb $'nut status -\t'
+if wait_for options; then
+  print -r -- "BEGIN status"
+  print -r -- "$READ_RESULT"
+  print -r -- "END status"
+else
+  print -r -- "STATUS MISS"
+fi
+reset_line || { print -r -- "PROMPT-READ-FAILED"; zpty -d pb; exit 1 }
+zpty -w -n pb $'nut doctor \t'
+if wait_for hardware; then
+  print -r -- "BEGIN doctor"
+  print -r -- "$READ_RESULT"
+  print -r -- "END doctor"
+else
+  print -r -- "DOCTOR MISS"
+fi
+reset_line || { print -r -- "PROMPT-READ-FAILED"; zpty -d pb; exit 1 }
+zpty -w -n pb $'nut --color \t'
+if wait_for always; then
+  print -r -- "BEGIN color"
+  print -r -- "$READ_RESULT"
+  print -r -- "END color"
+else
+  print -r -- "COLOR MISS"
+fi
+zpty -d pb
+"#;
+
+#[test]
+fn real_zsh_menus_match_golden() {
+    let home = tempfile::tempdir().unwrap();
+    let Some((stdout, stderr)) =
+        run_zpty(home.path(), &[("LANG", "C.UTF-8"), ("LC_ALL", "C.UTF-8")])
+    else {
+        return;
+    };
+    assert!(
+        stdout.contains("SETUP OK")
+            && stdout.contains("BEGIN root")
+            && stdout.contains("BEGIN status")
+            && stdout.contains("BEGIN doctor")
+            && stdout.contains("BEGIN color"),
+        "stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    let root_raw = section(&stdout, "root");
+    assert!(
+        root_raw.contains("\u{1b}[") && (root_raw.contains("36") || root_raw.contains("[1m")),
+        "headers should be bold cyan, got {root_raw:?}"
+    );
+    assert!(
+        root_raw.contains("\u{1b}[1m") || root_raw.contains("[1;"),
+        "headers should be bold, got {root_raw:?}"
+    );
+    let menus = format!(
+        "== nut <Tab> ==\n{}== nut status -<Tab> ==\n{}== nut doctor <Tab> ==\n{}== nut --color <Tab> ==\n{}",
+        extract_menu(root_raw),
+        extract_menu(section(&stdout, "status")),
+        extract_menu(section(&stdout, "doctor")),
+        extract_menu(section(&stdout, "color")),
+    );
+    let golden_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(ZSH_GOLDEN);
+    if std::env::var_os(GOLDENS_ENV).is_some() {
+        fs::write(&golden_path, &menus).unwrap();
+    }
+    let expected = fs::read_to_string(&golden_path).unwrap_or_default();
+    assert_eq!(
+        menus, expected,
+        "zsh menus drifted; run NUT_UPDATE_GOLDENS=1 cargo test --test completion -- --exact real_zsh_menus_match_golden"
+    );
+    let root_menu = extract_menu(root_raw);
+    let docs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/completion.md"))
+        .unwrap();
+    assert!(
+        docs.contains(root_menu.trim_end()),
+        "docs/completion.md must contain the golden root menu verbatim"
+    );
+
+    let home = tempfile::tempdir().unwrap();
+    let Some((no_color, _)) = run_zpty(
+        home.path(),
+        &[
+            ("LANG", "C.UTF-8"),
+            ("LC_ALL", "C.UTF-8"),
+            ("NO_COLOR", "1"),
+        ],
+    ) else {
+        return;
+    };
+    let root = section(&no_color, "root");
+    assert!(
+        !root.contains("36m") && !root.contains(";36"),
+        "NO_COLOR=1 headers must not carry cyan: {root:?}"
+    );
+    assert!(
+        root.contains("\u{1b}[1m") || root.contains("[1;"),
+        "NO_COLOR=1 headers should remain bold: {root:?}"
+    );
+
+    let home = tempfile::tempdir().unwrap();
+    let Some((ascii, _)) = run_zpty(
+        home.path(),
+        &[("LANG", "C"), ("LC_ALL", "C"), ("LC_CTYPE", "C")],
+    ) else {
+        return;
+    };
+    let ascii_root = strip_ansi_and_cr(section(&ascii, "root"));
+    assert!(
+        ascii_root.contains("== monitor =="),
+        "LANG=C should use ASCII headers: {ascii_root}"
+    );
 }

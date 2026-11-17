@@ -1,0 +1,15 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+--all	Include raw NUT variables	options	space
+--help	Print help	options	space
+--ups	UPS name (defaults to the selected host configuration, or primary)	options	space
+--upsd-address	Loopback upsd address (defaults to host configuration, or 127.0.0.1)	options	space
+--upsd-port	Loopback upsd port (defaults to host configuration, or 3493)	options	space
+--watch	Continuously refresh the status view	options	space
+--ascii	Use ASCII symbols and bars	global options	space
+--color	Color output policy	global options	space
+--config	Read host settings from this file	global options	space
+--json	Emit machine-readable JSON where supported	global options	space
+--verbose	Include additional diagnostic detail	global options	space

@@ -1,0 +1,9 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+blip	Test a 60-second mains interruption without shutting down	commands	space
+ac-loss	Test automatic power-on after a true AC loss	commands	space
+cycle	Test UPS outlet cycling after a clean shutdown	commands	space
+outage	Test shutdown and recovery during a sustained outage	commands	space
+report	Record observations after a drill and review the prior boot journal	commands	space

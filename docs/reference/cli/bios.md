@@ -119,11 +119,11 @@ Usage: nut bios profile [OPTIONS] [COMMAND]
 
 Commands:
   list
-
+          List board profiles and mark the DMI match
   show
-
+          Show one board profile by id
   new
-
+          Print a starter board-profile TOML for this machine
 
 Options:
       --color <WHEN>
@@ -142,9 +142,11 @@ Options:
 
 ### nut bios profile list
 
-
+List board profiles and mark the DMI match
 
 ```text
+List board profiles and mark the DMI match
+
 Usage: nut bios profile list [OPTIONS]
 
 Options:
@@ -164,14 +166,16 @@ Options:
 
 ### nut bios profile show
 
-
+Show one board profile by id
 
 ```text
+Show one board profile by id
+
 Usage: nut bios profile show [OPTIONS] <ID>
 
 Arguments:
   <ID>
-
+          Board profile id
 
 Options:
       --color <WHEN>
@@ -190,9 +194,11 @@ Options:
 
 ### nut bios profile new
 
-
+Print a starter board-profile TOML for this machine
 
 ```text
+Print a starter board-profile TOML for this machine
+
 Usage: nut bios profile new [OPTIONS]
 
 Options:

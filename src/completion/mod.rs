@@ -1,4 +1,5 @@
 //! Protocol 1, clap-backed completion, and per-user adapter lifecycle.
+mod catalog;
 mod engine;
 mod lifecycle;
 mod protocol;

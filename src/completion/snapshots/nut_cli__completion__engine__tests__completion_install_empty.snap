@@ -1,0 +1,6 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+zsh	Grouped menus with descriptions	shells	space
+bash	Plain candidate lists	shells	space

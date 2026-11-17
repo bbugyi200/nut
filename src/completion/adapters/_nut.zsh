@@ -5,7 +5,7 @@
 _nut() {
   local -a lines fields groups
   local -A arrays
-  local line value help group suffix array header ret=1
+  local line value help group suffix array header tag ret=1
 
   lines=(${(f)"$(command nut __complete zsh --protocol 1 --suffix "$SUFFIX" -- \
     "${(@Q)words[1,CURRENT-1]}" "${(Q)PREFIX}" 2>/dev/null)"})
@@ -13,8 +13,35 @@ _nut() {
 
   # Nut-scoped presentation defaults, applied only where you have set no style.
   if ! zstyle -m ":completion:${curcontext}:descriptions" format '*'; then
-    header='%B%F{cyan}%d%f%b'
-    (( ${+NO_COLOR} )) && header='%d'
+    local locale use_ascii=0
+    if [[ ${TERM-} == dumb ]]; then
+      use_ascii=1
+    else
+      if [[ -n ${LC_ALL-} ]]; then
+        locale=$LC_ALL
+      elif [[ -n ${LC_CTYPE-} ]]; then
+        locale=$LC_CTYPE
+      elif [[ -n ${LANG-} ]]; then
+        locale=$LANG
+      fi
+      locale=${(L)locale}
+      if [[ $locale != *utf-8* && $locale != *utf8* ]]; then
+        use_ascii=1
+      fi
+    fi
+    if (( use_ascii )); then
+      if [[ -n ${NO_COLOR-} ]]; then
+        header='%B== %d ==%b'
+      else
+        header='%B%F{cyan}== %d ==%f%b'
+      fi
+    else
+      if [[ -n ${NO_COLOR-} ]]; then
+        header='%B── %d ──%b'
+      else
+        header='%B%F{cyan}── %d ──%f%b'
+      fi
+    fi
     zstyle ':completion:*:*:nut:*:descriptions' format "$header"
   fi
   zstyle -m ":completion:${curcontext}:" group-name '*' ||
@@ -26,7 +53,7 @@ _nut() {
       ('!dirs')       _files -/ && ret=0; continue ;;
       ('!files')      _files && ret=0; continue ;;
       ('!files '*)    _files -g "${line#!files }" && ret=0; continue ;;
-      ('!message '*)  _message -r "${line#!message }"; continue ;;
+      ('!message '*)  _message -r "${${line#!message }//\%/%%}"; continue ;;
       ('!'*)          continue ;;  # a directive from a newer nut: ignore it
     esac
     fields=("${(@ps:\t:)line}")
@@ -44,10 +71,17 @@ _nut() {
   for group in $groups; do
     array=$arrays[$group]
     suffix=${group##*/} group=${group%/*}
+    tag=${(L)group}
+    tag=${tag//[^[:alnum:]]/-}
+    while [[ $tag == *--* ]]; do
+      tag=${tag//--/-}
+    done
+    tag=${tag#-}
+    tag=${tag%-}
     if [[ $suffix == nospace ]]; then
-      _describe -V -t "${group// /-}" "$group" $array -S '' && ret=0
+      _describe -V -t "nut-${tag}" "$group" $array -S '' && ret=0
     else
-      _describe -V -t "${group// /-}" "$group" $array && ret=0
+      _describe -V -t "nut-${tag}" "$group" $array && ret=0
     fi
   done
   return ret

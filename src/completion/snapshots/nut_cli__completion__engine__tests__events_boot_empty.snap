@@ -1,0 +1,7 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+0	Current boot	boots	space
+-1	Previous boot	boots	space
+-2	Two boots ago	boots	space

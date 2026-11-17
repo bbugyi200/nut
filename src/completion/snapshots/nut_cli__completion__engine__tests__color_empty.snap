@@ -1,0 +1,7 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+auto	Color only on a terminal; honors NO_COLOR and CLICOLOR_FORCE	color modes	space
+always	Always color, even through a pipe	color modes	space
+never	Never color	color modes	space

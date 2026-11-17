@@ -1,0 +1,56 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+tool	All 3 checks in this section	this tool	space
+tool.config	Host configuration parses	this tool	space
+tool.binary	Installed binary is root-owned	this tool	space
+tool.completion	Shell completion is current	this tool	space
+hw	All 9 checks in this section	hardware	space
+hw.usb	Exactly one matching USB UPS	hardware	space
+hw.data	UPS data is fresh	hardware	space
+hw.online	UPS is safely on line	hardware	space
+hw.delays	Shutdown and start delays match the profile	hardware	space
+hw.shutdown-return	shutdown.return is advertised	hardware	space
+hw.rb	Replace-battery flag is clear	hardware	space
+hw.charge	Battery charge is at least 90%	hardware	space
+hw.battery-age	Battery age versus install date	hardware	space
+hw.self-test	Last UPS self-test	hardware	space
+svc	All 8 checks in this section	services	space
+svc.driver	NUT driver is active	services	space
+svc.server	NUT server is active	services	space
+svc.monitor	NUT monitor is active	services	space
+svc.enabled	NUT units are enabled	services	space
+svc.restarts	Driver NRestarts are stable	services	space
+svc.listen	upsd listens only on loopback	services	space
+svc.client	A loopback monitor client is logged in	services	space
+svc.version	NUT version policy	services	space
+protect	All 6 checks in this section	protection	space
+protect.runtime	Early shutdown fits remaining runtime	protection	space
+protect.poweroff-wait	POWEROFF_WAIT headroom	protection	space
+protect.hook	Event hook is installed	protection	space
+protect.mail	Mail path exists	protection	space
+protect.pwrstatd	PowerPanel is not running	protection	space
+protect.killpower	No stale /etc/killpower	protection	space
+root	All 7 checks in this section	root-only	space
+root.drift	Rendered files match live NUT config	root-only	space
+root.credentials	upsd and upsmon credentials agree	root-only	space
+root.placeholders	No password placeholders remain	root-only	space
+root.instcmds	No instcmds = ALL grant	root-only	space
+root.perms	NUT file owners and modes	root-only	space
+state.drift	Applied state matches managed files	root-only	space
+state.backup	Applied-state backup is available	root-only	space
+boot	All 8 checks in this section	boot & BIOS	space
+boot.efi-order	EFI boot order starts with Linux	boot & BIOS	space
+boot.nofail	Listed mounts have nofail	boot & BIOS	space
+boot.fstab	findmnt --verify is clean	boot & BIOS	space
+boot.journal	journald is persistent	boot & BIOS	space
+boot.panic	kernel.panic is set	boot & BIOS	space
+boot.watchdog	Watchdog is available	boot & BIOS	space
+bios.profile	Board profile matches DMI	boot & BIOS	space
+bios.attest	BIOS attestation freshness	boot & BIOS	space
+proof	All 4 checks in this section	proof	space
+proof.blip	Mains blip drill	proof	space
+proof.ac-loss	True AC-loss drill	proof	space
+proof.cycle	UPS cycle drill	proof	space
+proof.outage	Sustained outage drill	proof	space

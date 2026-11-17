@@ -1,0 +1,5 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+!message PORT — Loopback upsd port (defaults to host configuration, or 3493)

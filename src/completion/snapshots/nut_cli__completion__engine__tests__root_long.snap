@@ -1,0 +1,11 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+--ascii	Use ASCII symbols and bars	options	space
+--color	Color output policy	options	space
+--config	Read host settings from this file	options	space
+--help	Print help	options	space
+--json	Emit machine-readable JSON where supported	options	space
+--verbose	Include additional diagnostic detail	options	space
+--version	Print version	options	space

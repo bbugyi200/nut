@@ -1,0 +1,9 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+-1h	The last hour	times	space
+-6h	The last six hours	times	space
+today	Since midnight	times	space
+yesterday	Since midnight yesterday	times	space
+-7d	The last seven days	times	space

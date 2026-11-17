@@ -1,0 +1,6 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+asus-prime-trx40-pro	PRIME TRX40-PRO	board profiles	space
+generic	generic	board profiles	space

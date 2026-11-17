@@ -1,0 +1,27 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+-b	Select a boot offset (0 is current, -1 is previous)	options	space
+--boot	Select a boot offset (0 is current, -1 is previous)	options	space
+-f	Stream new entries and updated stories until interrupted	options	space
+--follow	Stream new entries and updated stories until interrupted	options	space
+-h	Print help	options	space
+--help	Print help	options	space
+--last-outage	Show only the most recent outage (alias for --outages --limit 1)	options	space
+-n	Maximum stories or raw entries to show (1-2000; default 20)	options	space
+--limit	Maximum stories or raw entries to show (1-2000; default 20)	options	space
+-o	Show only power outages, blips, and shutdowns	options	space
+--outages	Show only power outages, blips, and shutdowns	options	space
+-r	Show source journal messages instead of stories	options	space
+--raw	Show source journal messages instead of stories	options	space
+-s	Include entries since a journalctl time (for example, 'today' or '-2h')	options	space
+--since	Include entries since a journalctl time (for example, 'today' or '-2h')	options	space
+--ascii	Use ASCII symbols and bars	global options	space
+--color	Color output policy	global options	space
+-c	Read host settings from this file	global options	space
+--config	Read host settings from this file	global options	space
+-j	Emit machine-readable JSON where supported	global options	space
+--json	Emit machine-readable JSON where supported	global options	space
+-v	Include additional diagnostic detail	global options	space
+--verbose	Include additional diagnostic detail	global options	space

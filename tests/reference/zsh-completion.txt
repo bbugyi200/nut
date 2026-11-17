@@ -1,0 +1,97 @@
+== nut <Tab> ==
+── monitor ──
+status   -- Show UPS status
+battery  -- Show battery charge and runtime, or run a guarded self-test
+events   -- Show UPS event history
+── act ──
+beeper  -- Show or change the UPS beeper
+notify  -- Send or inspect UPS notifications
+── set up ──
+init      -- Plan or apply NUT configuration
+rollback  -- List or restore a configuration backup
+config    -- Inspect, scaffold, render, or diff host settings
+── prove ──
+doctor  -- Check UPS protection and recovery readiness
+bios    -- Guide and verify BIOS recovery settings
+drill   -- Guide and record a physical outage drill
+── shell ──
+completion  -- Install, inspect, or remove shell completion
+== nut status -<Tab> ==
+── options ──
+--all               -- Include raw NUT variables
+--help          -h  -- Print help
+--ups               -- UPS name (defaults to the selected host configuration, or primary)
+--upsd-address      -- Loopback upsd address (defaults to host configuration, or 127.0.0.1)
+--upsd-port         -- Loopback upsd port (defaults to host configuration, or 3493)
+--watch             -- Continuously refresh the status view
+── global options ──
+--ascii        -- Use ASCII symbols and bars
+--color        -- Color output policy
+--config   -c  -- Read host settings from this file
+--json     -j  -- Emit machine-readable JSON where supported
+--verbose  -v  -- Include additional diagnostic detail
+== nut doctor <Tab> ==
+── this tool ──
+tool             -- All 3 checks in this section
+tool.config      -- Host configuration parses
+tool.binary      -- Installed binary is root-owned
+tool.completion  -- Shell completion is current
+── hardware ──
+hw                  -- All 9 checks in this section
+hw.usb              -- Exactly one matching USB UPS
+hw.data             -- UPS data is fresh
+hw.online           -- UPS is safely on line
+hw.delays           -- Shutdown and start delays match the profile
+hw.shutdown-return  -- shutdown.return is advertised
+hw.rb               -- Replace-battery flag is clear
+hw.charge           -- Battery charge is at least 90%
+hw.battery-age      -- Battery age versus install date
+hw.self-test        -- Last UPS self-test
+── services ──
+svc           -- All 8 checks in this section
+svc.driver    -- NUT driver is active
+svc.server    -- NUT server is active
+svc.monitor   -- NUT monitor is active
+svc.enabled   -- NUT units are enabled
+svc.restarts  -- Driver NRestarts are stable
+svc.listen    -- upsd listens only on loopback
+svc.client    -- A loopback monitor client is logged in
+svc.version   -- NUT version policy
+── protection ──
+protect                -- All 6 checks in this section
+protect.runtime        -- Early shutdown fits remaining runtime
+protect.poweroff-wait  -- POWEROFF_WAIT headroom
+protect.hook           -- Event hook is installed
+protect.mail           -- Mail path exists
+protect.pwrstatd       -- PowerPanel is not running
+protect.killpower      -- No stale /etc/killpower
+── root-only ──
+root               -- All 7 checks in this section
+root.drift         -- Rendered files match live NUT config
+root.credentials   -- upsd and upsmon credentials agree
+root.placeholders  -- No password placeholders remain
+root.instcmds      -- No instcmds = ALL grant
+root.perms         -- NUT file owners and modes
+state.drift        -- Applied state matches managed files
+state.backup       -- Applied-state backup is available
+── boot & BIOS ──
+boot            -- All 8 checks in this section
+boot.efi-order  -- EFI boot order starts with Linux
+boot.nofail     -- Listed mounts have nofail
+boot.fstab      -- findmnt --verify is clean
+boot.journal    -- journald is persistent
+boot.panic      -- kernel.panic is set
+boot.watchdog   -- Watchdog is available
+bios.profile    -- Board profile matches DMI
+bios.attest     -- BIOS attestation freshness
+── proof ──
+proof          -- All 4 checks in this section
+proof.blip     -- Mains blip drill
+proof.ac-loss  -- True AC-loss drill
+proof.cycle    -- UPS cycle drill
+proof.outage   -- Sustained outage drill
+== nut --color <Tab> ==
+── color modes ──
+auto    -- Color only on a terminal; honors NO_COLOR and CLICOLOR_FORCE
+always  -- Always color, even through a pipe
+never   -- Never color

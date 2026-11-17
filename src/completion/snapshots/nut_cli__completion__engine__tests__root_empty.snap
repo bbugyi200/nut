@@ -1,0 +1,16 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+status	Show UPS status	monitor	space
+battery	Show battery charge and runtime, or run a guarded self-test	monitor	space
+events	Show UPS event history	monitor	space
+beeper	Show or change the UPS beeper	act	space
+notify	Send or inspect UPS notifications	act	space
+init	Plan or apply NUT configuration	set up	space
+rollback	List or restore a configuration backup	set up	space
+config	Inspect, scaffold, render, or diff host settings	set up	space
+doctor	Check UPS protection and recovery readiness	prove	space
+bios	Guide and verify BIOS recovery settings	prove	space
+drill	Guide and record a physical outage drill	prove	space
+completion	Install, inspect, or remove shell completion	shell	space

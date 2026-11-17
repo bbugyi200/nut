@@ -272,7 +272,7 @@ pub enum ConfigAction {
     /// Render NUT files and the event hook with secret placeholders.
     Render {
         /// Write each rendered file into this directory.
-        #[arg(short, long, value_name = "DIR")]
+        #[arg(short, long, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
         output: Option<PathBuf>,
     },
     /// Compare rendered files with live NUT configuration. Secrets are masked.
@@ -306,8 +306,14 @@ pub enum BiosAction {
 
 #[derive(Debug, Subcommand)]
 pub enum ProfileAction {
+    /// List board profiles and mark the DMI match.
     List,
-    Show { id: String },
+    /// Show one board profile by id.
+    Show {
+        /// Board profile id.
+        id: String,
+    },
+    /// Print a starter board-profile TOML for this machine.
     New,
 }
 
@@ -388,6 +394,7 @@ pub struct CompletionArgs {
 pub enum CompletionAction {
     /// Install an adapter and verify registration in an isolated real shell.
     Install {
+        /// Shell to install. Defaults to the current `$SHELL`.
         #[arg(value_enum)]
         shell: Option<crate::completion::Shell>,
         /// Preview without creating files.
@@ -404,12 +411,16 @@ pub enum CompletionAction {
     Status,
     /// Remove adapters whose bytes still match the recorded manifest.
     Uninstall {
+        /// Shell to remove. Defaults to the current `$SHELL`.
         #[arg(value_enum)]
         shell: Option<crate::completion::Shell>,
+        /// Preview without removing files.
         #[arg(short = 'n', long)]
         dry_run: bool,
     },
+    /// Print the zsh adapter for manual installation.
     Zsh,
+    /// Print the bash adapter for manual installation.
     Bash,
 }
 

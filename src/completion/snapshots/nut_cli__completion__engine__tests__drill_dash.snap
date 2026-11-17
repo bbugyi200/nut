@@ -1,0 +1,17 @@
+---
+source: src/completion/engine.rs
+expression: "output.join(\"\\n\")"
+---
+-h	Print help	options	space
+--help	Print help	options	space
+--ups	UPS name (defaults to the selected host configuration, or cp1500)	options	space
+--upsd-address	Loopback upsd address (defaults to 127.0.0.1)	options	space
+--upsd-port	Loopback upsd port (defaults to 3493)	options	space
+--ascii	Use ASCII symbols and bars	global options	space
+--color	Color output policy	global options	space
+-c	Read host settings from this file	global options	space
+--config	Read host settings from this file	global options	space
+-j	Emit machine-readable JSON where supported	global options	space
+--json	Emit machine-readable JSON where supported	global options	space
+-v	Include additional diagnostic detail	global options	space
+--verbose	Include additional diagnostic detail	global options	space
