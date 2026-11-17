@@ -27,6 +27,12 @@
   is stopped, so restoring an all-inactive pre-init stack no longer refuses
   after it stops upsd; starts and every stop under a running monitor keep the
   safe-online gate.
+- Stop the units init started before rollback restores configuration files,
+  and start pre-init-active units only after the restore. Restoring the
+  package `ups.conf` first left the driver's `ExecStop` unable to find its
+  device, so the driver stopped as `failed` and rollback refused. A unit that
+  stops as `failed` or had already failed is cleared with
+  `systemctl reset-failed` instead of blocking rollback.
 - Keep drill records inside the protected init state tree: `nut drill` now
   publishes records atomically as `root:root` 0600 files under the 0700
   `/var/lib/nut-cli/drills`, and non-root `nut doctor` skips the root-only

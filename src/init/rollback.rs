@@ -176,6 +176,14 @@ pub fn restore<H: Host>(
     save_progress(host, &backup.summary.stamp, &progress)?;
 
     let mut report = empty_report(&backup.summary.stamp, false);
+    // Units that were not active before init stop while the applied
+    // configuration is still live: a NUT driver's ExecStop resolves its
+    // device from ups.conf, so stopping it after the pre-init file returns
+    // fails the stop and leaves the unit failed. Units that were active
+    // before init start only once their configuration is restored.
+    let (stops, starts) = services_by_phase(&backup);
+    restore_services(host, &backup, &stops, options, &mut progress, &mut report)?;
+
     let state_path = Path::new(STATE_PATH);
     for file in files_in_restore_order(&backup)
         .into_iter()
@@ -250,19 +258,7 @@ pub fn restore<H: Host>(
         save_progress(host, &backup.summary.stamp, &progress)?;
     }
 
-    let mut services = backup.summary.services.clone();
-    services
-        .sort_by(|left, right| service_rank(left, right).then_with(|| left.unit.cmp(&right.unit)));
-    for service in services {
-        if progress.completed_services.contains(&service.unit) {
-            continue;
-        }
-        if restore_service(host, &backup, &service, options)? {
-            report.services_changed.push(service.unit.clone());
-        }
-        progress.completed_services.insert(service.unit.clone());
-        save_progress(host, &backup.summary.stamp, &progress)?;
-    }
+    restore_services(host, &backup, &starts, options, &mut progress, &mut report)?;
 
     let state_file = backup
         .files
@@ -556,6 +552,39 @@ fn files_in_restore_order(backup: &ValidatedBackup) -> Vec<&RestoreFile> {
     files
 }
 
+/// Split the recorded services into units to leave stopped and units to
+/// leave running, each in its safe order: stops run monitor, server, driver,
+/// target; starts run driver, server, monitor, target.
+fn services_by_phase(backup: &ValidatedBackup) -> (Vec<ServiceSnapshot>, Vec<ServiceSnapshot>) {
+    let mut services = backup.summary.services.clone();
+    services
+        .sort_by(|left, right| service_rank(left, right).then_with(|| left.unit.cmp(&right.unit)));
+    services
+        .into_iter()
+        .partition(|service| service.active != "active")
+}
+
+fn restore_services<H: Host>(
+    host: &H,
+    backup: &ValidatedBackup,
+    services: &[ServiceSnapshot],
+    options: &RollbackOptions,
+    progress: &mut RollbackProgress,
+    report: &mut RollbackReport,
+) -> Result<(), RollbackError> {
+    for service in services {
+        if progress.completed_services.contains(&service.unit) {
+            continue;
+        }
+        if restore_service(host, backup, service, options)? {
+            report.services_changed.push(service.unit.clone());
+        }
+        progress.completed_services.insert(service.unit.clone());
+        save_progress(host, &backup.summary.stamp, progress)?;
+    }
+    Ok(())
+}
+
 fn restore_service<H: Host>(
     host: &H,
     backup: &ValidatedBackup,
@@ -586,6 +615,10 @@ fn restore_service<H: Host>(
     if active == expected_active {
         return Ok(changed);
     }
+    if expected_active == "inactive" && active == "failed" {
+        clear_failed(host, &expected.unit)?;
+        return Ok(true);
+    }
     if expected_active == "active" && !restored_config_present(host)? {
         return Err(RollbackError::Service {
             unit: expected.unit.clone(),
@@ -607,7 +640,11 @@ fn restore_service<H: Host>(
         "restore service activity",
     )?;
     let observed = query_service(host, &expected.unit)?.0;
-    if observed != expected_active {
+    if expected_active == "inactive" && observed == "failed" {
+        // systemd still terminates the main process when an ExecStop
+        // command fails; only the failed marker remains to clear.
+        clear_failed(host, &expected.unit)?;
+    } else if observed != expected_active {
         return Err(RollbackError::Service {
             unit: expected.unit.clone(),
             detail: format!("requested {expected_active}, observed {observed}"),
@@ -615,6 +652,26 @@ fn restore_service<H: Host>(
     }
     changed = true;
     Ok(changed)
+}
+
+/// Return a stopped-but-failed unit to the inactive state recorded before
+/// init. A failed unit runs no process, so `reset-failed` changes no power
+/// behavior and needs no fresh UPS reading.
+fn clear_failed<H: Host>(host: &H, unit: &str) -> Result<(), RollbackError> {
+    run_checked(
+        host,
+        "systemctl",
+        &["reset-failed", unit],
+        "clear the unit's failed state",
+    )?;
+    let observed = query_service(host, unit)?.0;
+    if observed != "inactive" {
+        return Err(RollbackError::Service {
+            unit: unit.to_owned(),
+            detail: format!("requested inactive, observed {observed}"),
+        });
+    }
+    Ok(())
 }
 
 fn restore_enablement<H: Host>(
@@ -1529,5 +1586,172 @@ mod tests {
             "unexpected error: {error:?}"
         );
         assert!(stops_effects(&host).is_empty());
+    }
+
+    fn position(effects: &[HostEffect], wanted: impl Fn(&HostEffect) -> bool) -> usize {
+        effects
+            .iter()
+            .position(wanted)
+            .unwrap_or_else(|| panic!("effect missing from {effects:?}"))
+    }
+
+    fn systemctl_effect(effect: &HostEffect, verb: &str, unit: &str) -> bool {
+        matches!(effect, HostEffect::Run { program, args }
+            if program == OsStr::new("systemctl") && args == &[OsString::from(verb), OsString::from(unit)])
+    }
+
+    #[test]
+    fn rollback_stops_units_before_restoring_config_and_starts_them_after() {
+        // A NUT driver's ExecStop resolves its device from ups.conf: it must
+        // stop while init's ups.conf is still live, and a unit that ran before
+        // init must start only once its configuration is restored.
+        let driver = "nut-driver@cp1500.service";
+        let host = base(Some(b"before")).with_ups_observation(ups("OL CHRG"));
+        let services = vec![
+            inactive_snapshot(driver),
+            ServiceSnapshot {
+                unit: MONITOR_UNIT.to_owned(),
+                active: "active".to_owned(),
+                enabled: "enabled".to_owned(),
+            },
+        ];
+        let stamp = complete_init(&host, Some(b"after"), services, vec![], vec![], vec![]);
+        let host = host
+            .queue_program("systemctl", ["is-active", driver], output(0, "active\n"))
+            .queue_program("systemctl", ["is-enabled", driver], output(0, "enabled\n"))
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(3, "inactive\n"),
+            )
+            .queue_program("systemctl", ["stop", driver], output(0, ""))
+            .queue_program("systemctl", ["is-active", driver], output(3, "inactive\n"))
+            .queue_program("systemctl", ["is-enabled", driver], output(0, "enabled\n"))
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(3, "inactive\n"),
+            )
+            .queue_program(
+                "systemctl",
+                ["is-enabled", MONITOR_UNIT],
+                output(0, "enabled\n"),
+            )
+            .queue_program("systemctl", ["start", MONITOR_UNIT], output(0, ""))
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(0, "active\n"),
+            )
+            .queue_program(
+                "systemctl",
+                ["is-enabled", MONITOR_UNIT],
+                output(0, "enabled\n"),
+            );
+        let init_effects = host.effects().len();
+
+        let report = restore(&host, Some(&stamp), &RollbackOptions::default())
+            .unwrap_or_else(|error| panic!("rollback failed: {error:?}"));
+        assert_eq!(report.services_changed, vec![driver, MONITOR_UNIT]);
+        let effects = host.effects().split_off(init_effects);
+        let stop = position(&effects, |effect| systemctl_effect(effect, "stop", driver));
+        let restore_config = position(
+            &effects,
+            |effect| matches!(effect, HostEffect::ReplaceFile { path, .. } if path == Path::new(TARGET)),
+        );
+        let start = position(&effects, |effect| {
+            systemctl_effect(effect, "start", MONITOR_UNIT)
+        });
+        assert!(
+            stop < restore_config && restore_config < start,
+            "stop {stop}, config restore {restore_config}, start {start}: {effects:?}"
+        );
+    }
+
+    #[test]
+    fn a_stop_that_leaves_the_unit_failed_is_cleared_to_inactive() {
+        // The driver stopped, but its ExecStop exited non-zero, so systemd
+        // reports failed; rollback clears the marker to the pre-init state.
+        let driver = "nut-driver@cp1500.service";
+        let host = base(Some(b"before"));
+        let stamp = complete_init(
+            &host,
+            Some(b"after"),
+            vec![inactive_snapshot(driver)],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let host = host
+            .queue_program("systemctl", ["is-active", driver], output(0, "active\n"))
+            .queue_program("systemctl", ["is-enabled", driver], output(0, "enabled\n"))
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(3, "inactive\n"),
+            )
+            .queue_program("systemctl", ["stop", driver], output(0, ""))
+            .queue_program("systemctl", ["is-active", driver], output(3, "failed\n"))
+            .queue_program("systemctl", ["is-enabled", driver], output(0, "enabled\n"))
+            .queue_program("systemctl", ["reset-failed", driver], output(0, ""))
+            .queue_program("systemctl", ["is-active", driver], output(3, "inactive\n"))
+            .queue_program("systemctl", ["is-enabled", driver], output(0, "enabled\n"));
+
+        let report = restore(&host, Some(&stamp), &RollbackOptions::default())
+            .unwrap_or_else(|error| panic!("rollback failed: {error:?}"));
+        assert_eq!(report.services_changed, vec![driver]);
+        assert!(host.effects().iter().any(|effect| systemctl_effect(
+            effect,
+            "reset-failed",
+            driver
+        )));
+    }
+
+    #[test]
+    fn an_already_failed_unit_is_cleared_without_a_stop_or_upsd_reading() {
+        // upsmon crashed after init: nothing runs, so rollback neither stops
+        // it nor asks upsd; it only clears the failed marker.
+        let host = base(Some(b"before"));
+        let stamp = complete_init(
+            &host,
+            Some(b"after"),
+            vec![inactive_snapshot(MONITOR_UNIT)],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let host = host
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(3, "failed\n"),
+            )
+            .queue_program(
+                "systemctl",
+                ["is-enabled", MONITOR_UNIT],
+                output(0, "enabled\n"),
+            )
+            .queue_program("systemctl", ["reset-failed", MONITOR_UNIT], output(0, ""))
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(3, "inactive\n"),
+            )
+            .queue_program(
+                "systemctl",
+                ["is-enabled", MONITOR_UNIT],
+                output(0, "enabled\n"),
+            );
+
+        let report = restore(&host, Some(&stamp), &RollbackOptions::default())
+            .unwrap_or_else(|error| panic!("rollback failed: {error:?}"));
+        assert_eq!(report.services_changed, vec![MONITOR_UNIT]);
+        assert!(stops_effects(&host).is_empty());
+        assert!(
+            !host
+                .effects()
+                .iter()
+                .any(|effect| matches!(effect, HostEffect::ObserveUps { .. }))
+        );
     }
 }

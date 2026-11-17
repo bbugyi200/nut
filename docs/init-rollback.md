@@ -42,8 +42,16 @@ Installed distribution packages and package-owned users are retained. Rollback
 does not restore `/etc/group`, package databases, or account databases from raw
 file snapshots.
 
-The prior service enablement and active state are restored after configuration
-files. Starting any service, stopping the monitor, and stopping any other NUT
+The prior service enablement and active state are restored around the
+configuration files. Units that were not active before init are stopped first,
+while the applied configuration is still live: a NUT driver's stop command
+resolves its device from `ups.conf`, and the pre-init file may declare none.
+Units that were active before init are started only after their configuration,
+memberships, and groups are restored. A unit that stops but reports `failed`
+(its stop command exited non-zero after systemd ended the process), or that had
+already failed, runs nothing, so rollback clears the marker with
+`systemctl reset-failed` instead of leaving it failed.
+Starting any service, stopping the monitor, and stopping any other NUT
 unit while the monitor still runs require a fresh UPS status containing `OL`
 and none of `OB`, `LB`, or `FSD`. Units are stopped monitor first, then the
 server, then the driver; once the monitor is stopped no shutdown authority
