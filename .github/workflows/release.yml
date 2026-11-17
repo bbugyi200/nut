@@ -42,7 +42,15 @@ jobs:
           cp "$src" "$dest"
           sha256sum "$dest" | tee "$dest.sha256"
           file "$dest"
-          if ldd "$dest"; then
+          # musl static-pie: `ldd` prints "statically linked" and exits 0.
+          # Treat mapped dynamic libraries as failure; require the static line.
+          ldd_out=$(ldd "$dest" 2>&1 || true)
+          printf '%s\n' "$ldd_out"
+          if printf '%s\n' "$ldd_out" | grep -Eq '=> /'; then
+            echo "expected a statically linked musl binary" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$ldd_out" | grep -qi 'statically linked'; then
             echo "expected a statically linked musl binary" >&2
             exit 1
           fi

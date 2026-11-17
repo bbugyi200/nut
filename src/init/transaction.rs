@@ -769,6 +769,32 @@ pub(crate) fn original_file<H: Host>(
     }
 }
 
+/// Live fingerprint a deferred file bind must still match. An earlier
+/// operation that already targeted this path contributes its recorded
+/// `after`; otherwise the immutable backup preimage is required.
+pub(crate) fn expected_bind_preimage<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    path: &Path,
+    operation_id: &str,
+) -> Result<String, TransactionError> {
+    let mut expected = match original_file(host, transaction, path)? {
+        None => "absent".to_owned(),
+        Some((bytes, metadata)) => fingerprint(&bytes, &metadata),
+    };
+    let pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    for operation in &pending.operations {
+        if operation.id == operation_id {
+            break;
+        }
+        if operation.target.as_deref() == Some(path) {
+            expected.clone_from(&operation.after);
+        }
+    }
+    Ok(expected)
+}
+
 /// Bind a reserved resource once, after durable secret materialization or
 /// package creation of a group. The original backup remains immutable.
 /// Deferred resources are external operations: recovery must provide their

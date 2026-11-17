@@ -410,7 +410,11 @@ fn split_command(command: &str) -> Option<Vec<String>> {
 fn read_command<R: BufRead>(reader: &mut R) -> io::Result<Option<String>> {
     let mut command = Vec::new();
     loop {
-        let available = reader.fill_buf()?;
+        let available = match reader.fill_buf() {
+            Ok(available) => available,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
         if available.is_empty() {
             return if command.is_empty() {
                 Ok(None)

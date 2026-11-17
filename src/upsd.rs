@@ -603,9 +603,17 @@ fn read_bounded_line<R: BufRead>(
 ) -> Result<String, UpsdError> {
     let mut line = Vec::new();
     loop {
-        let available = reader
-            .fill_buf()
-            .map_err(|error| UpsdError::Protocol(format!("cannot read response: {error}")))?;
+        let available = loop {
+            match reader.fill_buf() {
+                Ok(available) => break available,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => {
+                    return Err(UpsdError::Protocol(format!(
+                        "cannot read response: {error}"
+                    )));
+                }
+            }
+        };
         if available.is_empty() {
             return Err(UpsdError::Protocol(
                 "connection closed before the response line ended".into(),
@@ -736,9 +744,81 @@ fn parse_quoted_value(input: &str) -> Result<String, UpsdError> {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{self, BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
     use std::thread;
+
+    struct InterruptOnceThenLine {
+        interrupted: bool,
+        data: &'static [u8],
+    }
+
+    impl Read for InterruptOnceThenLine {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let available = self.fill_buf()?;
+            let count = available.len().min(buf.len());
+            buf[..count].copy_from_slice(&available[..count]);
+            self.consume(count);
+            Ok(count)
+        }
+    }
+
+    impl BufRead for InterruptOnceThenLine {
+        fn fill_buf(&mut self) -> io::Result<&[u8]> {
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            Ok(self.data)
+        }
+
+        fn consume(&mut self, amt: usize) {
+            self.data = &self.data[amt.min(self.data.len())..];
+        }
+    }
+
+    struct FailFill(io::ErrorKind);
+
+    impl Read for FailFill {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::from(self.0))
+        }
+    }
+
+    impl BufRead for FailFill {
+        fn fill_buf(&mut self) -> io::Result<&[u8]> {
+            Err(io::Error::from(self.0))
+        }
+
+        fn consume(&mut self, _: usize) {}
+    }
+
+    #[test]
+    fn read_bounded_line_retries_interrupted_fill_buf() {
+        let mut reader = InterruptOnceThenLine {
+            interrupted: false,
+            data: b"OK\n",
+        };
+        let mut total_bytes = 0;
+        assert_eq!(
+            read_bounded_line(&mut reader, &mut total_bytes, 1024, 1024).unwrap(),
+            "OK"
+        );
+        assert_eq!(total_bytes, 3);
+    }
+
+    #[test]
+    fn read_bounded_line_maps_non_interrupted_errors_to_protocol() {
+        let mut reader = FailFill(io::ErrorKind::TimedOut);
+        let mut total_bytes = 0;
+        let error = read_bounded_line(&mut reader, &mut total_bytes, 1024, 1024).unwrap_err();
+        match error {
+            UpsdError::Protocol(message) => {
+                assert!(message.contains("cannot read response"), "{message}");
+            }
+            other => panic!("expected Protocol, got {other:?}"),
+        }
+    }
 
     #[test]
     fn parses_escaped_quotes_and_backslashes() {

@@ -30,7 +30,13 @@ its first effect. It does not change the original backup. Deferred files use
 external observations for recovery, including the destination path in their
 fingerprints. In particular, capture a package-created default file as the
 resource's intermediate preimage only after the package operation is verified;
-the backup must still contain its original absent marker.
+the backup must still contain its original absent marker. Binding a deferred
+file refuses when the live primary target no longer matches the backup
+preimage, or the `after` fingerprint of an earlier operation that already
+targeted that path. Extra `backup_targets()` entries are not compared, because
+earlier operations in the same transaction may have rewritten them. The
+refusal names the path: move the changed file aside so the target matches its
+recorded preimage, then resume. Binding never overwrites the intervening file.
 
 `apply_resource` checks actual state, journals intent, performs the operation,
 verifies the result and journals completion. A command exiting zero without the

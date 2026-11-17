@@ -37,6 +37,11 @@ pub enum ResourceError {
     Host(#[from] HostError),
     #[error("resource apply refused: {0}")]
     Refused(&'static str),
+    #[error(
+        "file {} changed after the transaction's backup; move it aside so the target matches its recorded preimage, then resume",
+        path.display()
+    )]
+    ChangedAfterBackup { path: PathBuf },
 }
 
 type Result<T> = std::result::Result<T, ResourceError>;
@@ -305,6 +310,15 @@ impl Resource {
         Self(Action::Retire { hook, upssched })
     }
 
+    fn primary_file_target(&self) -> Option<&Path> {
+        match &self.0 {
+            Action::File { path, .. } => Some(path.as_path()),
+            Action::Fstab { .. } => Some(Path::new(FSTAB_PATH)),
+            Action::Retire { .. } => Some(Path::new(LEGACY_HOOK)),
+            _ => None,
+        }
+    }
+
     /// Back up these targets before any package effects or secret generation.
     pub fn backup_targets(&self) -> Vec<PathBuf> {
         match &self.0 {
@@ -323,12 +337,7 @@ impl Resource {
         if before == after {
             return Ok(None);
         }
-        let target = match &self.0 {
-            Action::File { path, .. } => Some(path.clone()),
-            Action::Fstab { .. } => Some(PathBuf::from(FSTAB_PATH)),
-            Action::Retire { .. } => Some(PathBuf::from(LEGACY_HOOK)),
-            _ => None,
-        };
+        let target = self.primary_file_target().map(Path::to_path_buf);
         Ok(Some(PreparedResource {
             resource: self,
             intent: OperationIntent {
@@ -427,6 +436,16 @@ pub fn bind_resource(
     transaction: &Transaction,
     resource: &mut PreparedResource,
 ) -> Result<()> {
+    if let Some(target) = resource.resource.primary_file_target() {
+        let live = file_state(host, target)?;
+        let expected =
+            transaction::expected_bind_preimage(host, transaction, target, &resource.intent.id)?;
+        if live != expected {
+            return Err(ResourceError::ChangedAfterBackup {
+                path: target.to_path_buf(),
+            });
+        }
+    }
     let reserved = reserve_resource(&resource.intent.id);
     let mut bound = resource.intent.clone();
     bound.target = None;

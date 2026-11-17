@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Retry `EINTR` (`Interrupted`) while reading upsd response lines so a
+  stop/continue or cgroup freeze no longer fails `status`, `doctor`, and `init`
+  with "Interrupted system call".
+- Raise the real-shell completion registration probe deadline from 2s to 10s so
+  loaded machines no longer flake adapter install tests. The deadline still
+  bounds hung shells.
+- Refuse to bind a deferred init file whose live primary target no longer
+  matches the transaction's backup preimage, or an earlier operation's recorded
+  `after` for that path. Name the path, keep the file, and tell the operator to
+  move it aside before resume.
+- Treat `ldd` "statically linked" as success in the `v*` Release workflow so a
+  musl static-pie binary is packaged instead of failing the checksum step.
+
+## 0.1.0 — 2026-11-17
+
 - Include operator hook messages stored in per-user journals in event history,
   follow, and follow cursors. Keep the system-journal access check so a partial
   unprivileged view is still reported as needing root.
@@ -172,7 +187,4 @@
 - Add help/version output, offline CLI tests, and the documented safety contract.
 - Pin Rust, commit the dependency lockfile, and add the Justfile and SHA-pinned CI gates.
 - Register the SASE `check` tool with gate inputs and toolchain fingerprints.
-
-## Completion
-
 - Add live protocol-1 bash/zsh completion, grouped command descriptions, bounded UPS-name lookup, board profiles and backup stamps, and atomic adapter install/status/uninstall with real-shell CI tests.

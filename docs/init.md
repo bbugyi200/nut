@@ -77,7 +77,11 @@ config says so. `nut events` may still need `sudo nut events` without it.
 A nonempty apply snapshots every affected preexisting file, including absent
 targets, before effects. Interrupted transactions resume from durable
 checkpoints when current targets match the recorded before/after
-possibilities. Unrelated drift requires a fresh reviewed plan.
+possibilities. Unrelated drift requires a fresh reviewed plan. If a reserved
+file target changed after the backup — for example a host config created by
+hand while the first apply was interrupted — binding refuses and names the
+path. Move that file aside so the target matches its recorded preimage, then
+resume. Init never overwrites the changed file.
 
 `nut rollback [STAMP] --dry-run` and `--list` never mutate or elevate. Restore
 needs root and confirmation (`--yes` for reviewed automation/CI). Rollback

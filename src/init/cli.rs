@@ -319,8 +319,7 @@ fn render_preview_text<H: Host, W: Write>(
     );
     write_wrapped(stdout, &summary, width)?;
     // Group file steps for quick review.
-    let mut shown = 0;
-    for step in &view.steps {
+    for (shown, step) in view.steps.iter().enumerate() {
         if shown >= 12 {
             let rest = view.steps.len() - shown;
             let ellipsis = if ui.glyphs.arrow == "->" {
@@ -348,7 +347,6 @@ fn render_preview_text<H: Host, W: Write>(
             &format!("     {marker} {}  {}", step.id, step.summary),
             width,
         )?;
-        shown += 1;
     }
     if !view.explanations.is_empty() {
         for explanation in &view.explanations {
@@ -413,48 +411,50 @@ fn is_unreadable_partial(plan: &Plan) -> bool {
         .any(|explanation| explanation.contains("needs root to read"))
 }
 
-fn elevated_argv_init(
-    hash: Option<&str>,
+struct ElevatedInitArgv<'a> {
+    hash: Option<&'a str>,
     dry_run: bool,
     yes: bool,
     rotate: bool,
-    ups: Option<&str>,
-    config_abs: &Path,
+    ups: Option<&'a str>,
+    config: &'a Path,
     json: bool,
     ascii: bool,
     color: ColorChoice,
-) -> Vec<OsString> {
+}
+
+fn elevated_argv_init(args: &ElevatedInitArgv<'_>) -> Vec<OsString> {
     let mut argv: Vec<OsString> = vec![
         OsString::from("--"),
         OsString::from(INSTALLED_BINARY),
         OsString::from("init"),
     ];
-    if dry_run {
+    if args.dry_run {
         argv.push(OsString::from("--dry-run"));
     }
-    if rotate {
+    if args.rotate {
         argv.push(OsString::from("--rotate-secrets"));
     }
-    if let Some(hash) = hash {
+    if let Some(hash) = args.hash {
         argv.push(OsString::from("--expect-plan"));
         argv.push(OsString::from(hash));
     }
-    if yes {
+    if args.yes {
         argv.push(OsString::from("--yes"));
     }
-    if let Some(ups) = ups {
+    if let Some(ups) = args.ups {
         argv.push(OsString::from("--ups"));
         argv.push(OsString::from(ups));
     }
     argv.push(OsString::from("--config"));
-    argv.push(OsString::from(config_abs));
-    if json {
+    argv.push(OsString::from(args.config));
+    if args.json {
         argv.push(OsString::from("--json"));
     }
-    if ascii {
+    if args.ascii {
         argv.push(OsString::from("--ascii"));
     }
-    match color {
+    match args.color {
         ColorChoice::Auto => {}
         ColorChoice::Always => {
             argv.push(OsString::from("--color"));
@@ -524,19 +524,23 @@ fn parse_privileged_preview(bytes: &[u8]) -> Result<PrivilegedPreview, NutError>
     Ok(value)
 }
 
+struct ApplyRender<'a> {
+    hash: &'a str,
+    backup: Option<&'a str>,
+    files: &'a [PathBuf],
+    services: &'a [String],
+    resumed: bool,
+}
+
 fn render_apply_text<H: Host, W: Write>(
     host: &H,
-    hash: &str,
-    backup: Option<&str>,
-    files: &[PathBuf],
-    services: &[String],
-    resumed: bool,
+    applied: &ApplyRender<'_>,
     stdout: &mut W,
     ui: &UiContext,
 ) -> Result<(), NutError> {
     use crate::ui::theme::{Theme, Tone};
     let host_name = hostname(host);
-    if files.is_empty() && services.is_empty() {
+    if applied.files.is_empty() && applied.services.is_empty() {
         let line = format!(" {} Already converged. Nothing to change.", ui.glyphs.ok);
         writeln!(
             stdout,
@@ -549,7 +553,7 @@ fn render_apply_text<H: Host, W: Write>(
     let separator = dot(ui);
     let title = format!(
         " nut init{separator}{host_name}{separator}applied {}",
-        short_hash(hash)
+        short_hash(applied.hash)
     );
     writeln!(
         stdout,
@@ -557,10 +561,10 @@ fn render_apply_text<H: Host, W: Write>(
         Theme::paint(Tone::Ok, &title, ui.color_enabled)
     )
     .map_err(write_error)?;
-    if resumed {
+    if applied.resumed {
         write_wrapped(stdout, "   Resumed an interrupted transaction.", ui.width)?;
     }
-    if let Some(stamp) = backup {
+    if let Some(stamp) = applied.backup {
         write_wrapped(
             stdout,
             &format!("   Backup kept under /var/backups/nut-cli/{stamp}."),
@@ -572,20 +576,20 @@ fn render_apply_text<H: Host, W: Write>(
             ui.width,
         )?;
     }
-    if !files.is_empty() {
+    if !applied.files.is_empty() {
         write_wrapped(
             stdout,
-            &format!("   Files applied: {}", files.len()),
+            &format!("   Files applied: {}", applied.files.len()),
             ui.width,
         )?;
-        for path in files.iter().take(12) {
+        for path in applied.files.iter().take(12) {
             write_wrapped(stdout, &format!("     ~ {}", path.display()), ui.width)?;
         }
     }
-    if !services.is_empty() {
+    if !applied.services.is_empty() {
         write_wrapped(
             stdout,
-            &format!("   Services applied: {}", services.join(", ")),
+            &format!("   Services applied: {}", applied.services.join(", ")),
             ui.width,
         )?;
     }
@@ -741,11 +745,13 @@ fn yes_init<H: Host, W: Write>(
     } else {
         render_apply_text(
             host,
-            &report.plan_hash,
-            report.backup_stamp.as_deref(),
-            &report.files_applied,
-            &report.services_applied,
-            report.resumed,
+            &ApplyRender {
+                hash: &report.plan_hash,
+                backup: report.backup_stamp.as_deref(),
+                files: &report.files_applied,
+                services: &report.services_applied,
+                resumed: report.resumed,
+            },
             stdout,
             ui,
         )?;
@@ -850,11 +856,13 @@ fn interactive_init<H: Host, W: Write>(
         } else {
             render_apply_text(
                 host,
-                &report.plan_hash,
-                report.backup_stamp.as_deref(),
-                &report.files_applied,
-                &report.services_applied,
-                report.resumed,
+                &ApplyRender {
+                    hash: &report.plan_hash,
+                    backup: report.backup_stamp.as_deref(),
+                    files: &report.files_applied,
+                    services: &report.services_applied,
+                    resumed: report.resumed,
+                },
                 stdout,
                 ui,
             )?;
@@ -873,17 +881,17 @@ fn interactive_init<H: Host, W: Write>(
         return Ok(0);
     }
     verify_elevation_binary(host)?;
-    let argv = elevated_argv_init(
-        Some(&hash),
-        false,
-        true,
-        args.rotate_secrets,
-        args.ups.as_deref(),
-        config_abs,
-        output.json,
-        output.ascii,
-        output.color,
-    );
+    let argv = elevated_argv_init(&ElevatedInitArgv {
+        hash: Some(&hash),
+        dry_run: false,
+        yes: true,
+        rotate: args.rotate_secrets,
+        ups: args.ups.as_deref(),
+        config: config_abs,
+        json: output.json,
+        ascii: output.ascii,
+        color: output.color,
+    });
     let code = run_sudo_inherited(host, &argv)?;
     if code != 0 {
         return Err(NutError::operational(format!(
@@ -910,17 +918,17 @@ fn privileged_preview_flow<H: Host, W: Write>(
             "partial preview only; re-run with root or fix unreadable inputs",
         ));
     }
-    let argv = elevated_argv_init(
-        None,
-        true,
-        false,
-        args.rotate_secrets,
-        args.ups.as_deref(),
-        config_abs,
-        true,
-        output.ascii,
-        output.color,
-    );
+    let argv = elevated_argv_init(&ElevatedInitArgv {
+        hash: None,
+        dry_run: true,
+        yes: false,
+        rotate: args.rotate_secrets,
+        ups: args.ups.as_deref(),
+        config: config_abs,
+        json: true,
+        ascii: output.ascii,
+        color: output.color,
+    });
     let captured = run_sudo_captured(host, &argv)?;
     if captured.status != Some(0) {
         return Err(NutError::operational(format!(
@@ -952,17 +960,17 @@ fn privileged_preview_flow<H: Host, W: Write>(
     if !confirm(host, "Apply this privileged plan with sudo?  [y/N] ")? {
         return Err(NutError::operational("cancelled; no changes were made"));
     }
-    let apply_argv = elevated_argv_init(
-        Some(&hash),
-        false,
-        true,
-        args.rotate_secrets,
-        args.ups.as_deref(),
-        config_abs,
-        output.json,
-        output.ascii,
-        output.color,
-    );
+    let apply_argv = elevated_argv_init(&ElevatedInitArgv {
+        hash: Some(&hash),
+        dry_run: false,
+        yes: true,
+        rotate: args.rotate_secrets,
+        ups: args.ups.as_deref(),
+        config: config_abs,
+        json: output.json,
+        ascii: output.ascii,
+        color: output.color,
+    });
     let code = run_sudo_inherited(host, &apply_argv)?;
     if code != 0 {
         return Err(NutError::operational(format!(
@@ -1487,16 +1495,9 @@ fn rollback_apply<H: Host, W: Write>(
                     .and_then(|value| value.as_str())
                     .unwrap_or(args.stamp.as_deref().unwrap_or("latest"))
                     .to_owned();
-                if !output.json {
-                    stdout.write_all(&captured.stdout).map_err(write_error)?;
-                    if !captured.stdout.ends_with(b"\n") {
-                        writeln!(stdout).map_err(write_error)?;
-                    }
-                } else {
-                    stdout.write_all(&captured.stdout).map_err(write_error)?;
-                    if !captured.stdout.ends_with(b"\n") {
-                        writeln!(stdout).map_err(write_error)?;
-                    }
+                stdout.write_all(&captured.stdout).map_err(write_error)?;
+                if !captured.stdout.ends_with(b"\n") {
+                    writeln!(stdout).map_err(write_error)?;
                 }
                 if !confirm(host, &format!("Restore backup {stamp}?  [y/N] "))? {
                     return Err(NutError::operational("cancelled; no changes were made"));

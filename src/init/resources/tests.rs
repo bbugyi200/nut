@@ -204,6 +204,69 @@ fn deferred_secret_binding_is_once_only_and_requires_backup() {
 }
 
 #[test]
+fn deferred_bind_refuses_file_changed_after_backup() {
+    let host = host();
+    let id = "file:nut-toml";
+    let path = Path::new("/etc/nut-cli/nut.toml");
+    let request = BeginRequest {
+        plan_hash: "c".repeat(64),
+        targets: vec![path.to_path_buf(), "/var/lib/nut-cli/state.json".into()],
+        operations: vec![reserve_resource(id)],
+        services: vec![],
+        membership_additions: vec![],
+        created_groups: vec![],
+    };
+    let tx = begin(&host, &request).unwrap().unwrap();
+    assert!(host.read_protected(path).unwrap().is_none());
+
+    let metadata = FileMetadata::file(0, 0, 0o644);
+    let intervening = b"hand-written after backup\n";
+    host.replace_file_atomic(path, intervening, &metadata)
+        .unwrap();
+
+    let mut resource = Resource::file(
+        path.to_path_buf(),
+        b"desired config\n".into(),
+        metadata.clone(),
+    )
+    .unwrap()
+    .prepare(&host, id)
+    .unwrap()
+    .unwrap();
+    let error = bind_resource(&host, &tx, &mut resource).unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains("/etc/nut-cli/nut.toml")
+            && message.contains("changed after the transaction's backup"),
+        "{message}"
+    );
+    assert_eq!(
+        host.read_protected(path).unwrap().as_deref(),
+        Some(intervening.as_slice())
+    );
+    assert_eq!(host.metadata(path).unwrap(), Some(metadata.clone()));
+    let (_, state) = transaction::operation_record(&host, &tx, id).unwrap();
+    assert_eq!(state, CheckpointState::Planned);
+
+    host.remove_protected(path).unwrap();
+    let mut resource = Resource::file(
+        path.to_path_buf(),
+        b"desired config\n".into(),
+        metadata.clone(),
+    )
+    .unwrap()
+    .prepare(&host, id)
+    .unwrap()
+    .unwrap();
+    bind_resource(&host, &tx, &mut resource).unwrap();
+    apply_resource(&host, &tx, &resource).unwrap();
+    assert_eq!(
+        host.read_protected(path).unwrap().as_deref(),
+        Some(b"desired config\n".as_slice())
+    );
+}
+
+#[test]
 fn membership_is_additive_and_verified_not_just_exit_zero() {
     let mut host = host()
         .with_program_args("id", ["--groups", "--", "alice"], out(0, "1000 27 101"))

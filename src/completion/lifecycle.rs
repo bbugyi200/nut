@@ -26,6 +26,10 @@ struct Entry {
     protocol: u32,
 }
 
+/// Deadline for real-shell probes. It exists to bound hung shells, not to
+/// measure speed.
+const PROBE_DEADLINE: Duration = Duration::from_secs(10);
+
 fn failure(error: impl std::fmt::Display) -> NutError {
     NutError::operational(format!("completion: {error}"))
 }
@@ -122,7 +126,7 @@ fn probe(shell: Shell, flags: &str, script: &str, args: &[&Path]) -> Option<Vec<
     let success = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status.success(),
-            Ok(None) if start.elapsed() < Duration::from_secs(2) => {
+            Ok(None) if start.elapsed() < PROBE_DEADLINE => {
                 std::thread::sleep(Duration::from_millis(10))
             }
             _ => {
@@ -140,7 +144,7 @@ fn probe(shell: Shell, flags: &str, script: &str, args: &[&Path]) -> Option<Vec<
     // beyond the original deadline for its output.
     let result = if success {
         receiver
-            .recv_timeout(Duration::from_secs(2).saturating_sub(start.elapsed()))
+            .recv_timeout(PROBE_DEADLINE.saturating_sub(start.elapsed()))
             .ok()
     } else {
         None
