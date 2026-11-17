@@ -18,6 +18,15 @@
   re-observes unavailable or stale readings, and post-apply verification
   repeats while its only failures are readiness gaps. Explicit OB, LB, or FSD
   readings and every other failure still refuse immediately.
+- Treat upsd's connect-time `ups.status: WAIT` placeholder, which NUT 2.8.1
+  publishes until the driver answers its first dump, as no UPS data: doctor
+  `hw.data` fails with a "waiting for the driver" reason, and init's
+  safe-online gate and post-apply verification settle through it instead of
+  refusing a just-restarted stack as not on line power. Rollback no longer
+  needs a fresh upsd reading to stop the server and driver once the monitor
+  is stopped, so restoring an all-inactive pre-init stack no longer refuses
+  after it stops upsd; starts and every stop under a running monitor keep the
+  safe-online gate.
 - Keep drill records inside the protected init state tree: `nut drill` now
   publishes records atomically as `root:root` 0600 files under the 0700
   `/var/lib/nut-cli/drills`, and non-root `nut doctor` skips the root-only

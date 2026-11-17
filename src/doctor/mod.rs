@@ -317,6 +317,18 @@ impl DoctorReport {
 /// reported in the counts but does not fail it.
 pub const REQUIRED_PROTECTION_CHECKS: &[&str] = &["hw.data", "hw.online"];
 
+/// Whether `ups.status` is upsd's connect-time placeholder rather than driver
+/// data. When upsd (re)connects to a driver it publishes `ups.status: WAIT`
+/// until the driver answers its initial DUMPALL (NUT `server/sstate.c`), so a
+/// just-restarted upsd briefly reports `WAIT` as the only status flag.
+pub fn status_awaits_driver(status: &str) -> bool {
+    let mut flags = status.split_ascii_whitespace();
+    flags
+        .next()
+        .is_some_and(|flag| flag.eq_ignore_ascii_case("WAIT"))
+        && flags.next().is_none()
+}
+
 /// Gather a snapshot and run every check without parsing terminal output.
 /// Never prompts, elevates, writes files, or sleeps unless the caller opts in
 /// through a future observe duration.
@@ -844,6 +856,66 @@ mod tests {
             usb["evidence"].as_str().unwrap().contains("0764:0601"),
             "{usb}"
         );
+    }
+
+    #[test]
+    fn status_awaits_driver_matches_only_the_lone_wait_placeholder() {
+        assert!(status_awaits_driver("WAIT"));
+        assert!(status_awaits_driver(" wait "));
+        assert!(!status_awaits_driver(""));
+        assert!(!status_awaits_driver("OL"));
+        assert!(!status_awaits_driver("OL WAIT"));
+        assert!(!status_awaits_driver("WAITING"));
+    }
+
+    #[test]
+    fn hw_data_fails_while_upsd_waits_for_the_driver_dump() {
+        use crate::host::UpsObservation;
+        use std::collections::BTreeMap;
+
+        // upsd publishes only `ups.status: WAIT` between connecting to a
+        // driver and receiving its first dump.
+        let host = fixture_host().with_ups_observation(UpsObservation {
+            vars: BTreeMap::from([("ups.status".into(), "WAIT".into())]),
+            clients: vec!["127.0.0.1".into()],
+            greeting: Some("Network UPS Tools upsd 2.8.1".into()),
+            nut_version: Some("2.8.1".into()),
+            ..UpsObservation::default()
+        });
+        let (code, text, err) = execute(
+            &[
+                "nut",
+                "--ascii",
+                "--json",
+                "--config",
+                "/config.toml",
+                "doctor",
+                "hw.data",
+                "hw.online",
+            ],
+            &host,
+        );
+        assert_ne!(code, 0, "{err}\n{text}");
+        let json: Value = serde_json::from_str(&text).unwrap();
+        let check = |id: &str| {
+            json["checks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|check| check["id"] == id)
+                .unwrap()
+                .clone()
+        };
+        let data = check("hw.data");
+        assert_eq!(data["status"], "fail", "{json}");
+        assert!(
+            data["evidence"]
+                .as_str()
+                .unwrap()
+                .contains("waiting for the driver's first data dump"),
+            "{data}"
+        );
+        assert_eq!(check("hw.online")["status"], "fail", "{json}");
     }
 
     #[test]

@@ -43,8 +43,12 @@ does not restore `/etc/group`, package databases, or account databases from raw
 file snapshots.
 
 The prior service enablement and active state are restored after configuration
-files. Any service activity change requires a fresh UPS status containing `OL`
-and none of `OB`, `LB`, or `FSD`. A missing or unsafe observation leaves the
+files. Starting any service, stopping the monitor, and stopping any other NUT
+unit while the monitor still runs require a fresh UPS status containing `OL`
+and none of `OB`, `LB`, or `FSD`. Units are stopped monitor first, then the
+server, then the driver; once the monitor is stopped no shutdown authority
+remains, so the server and driver stop without re-observing upsd, which the
+same rollback may already have stopped. A missing or unsafe observation leaves the
 backup and progress record in place; retry the same rollback after the UPS is
 safely online. A service that was inactive before init stays stopped. If the
 restored UPS configuration is absent, rollback refuses to start a driver or

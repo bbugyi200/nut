@@ -54,8 +54,9 @@ const SECRET_ENTROPY_BYTES: usize = 32;
 const SETTLE_ATTEMPTS: u32 = 30;
 const SETTLE_INTERVAL: Duration = Duration::from_millis(500);
 /// Doctor checks that only mean "a just-started unit is not ready yet".
-/// `hw.online` joins them only when `hw.data` also failed (no reading at all);
-/// an explicit OB/LB/FSD reading with data present never waits.
+/// `hw.online` joins them only when `hw.data` also failed (no reading at all,
+/// or upsd's connect-time `ups.status: WAIT` placeholder before the driver's
+/// first dump); an explicit OB/LB/FSD reading with data present never waits.
 const SETTLING_CHECKS: &[&str] = &[
     "svc.driver",
     "svc.server",
@@ -321,6 +322,11 @@ fn require_safe_online(
     if flags.is_empty() {
         return Err(ConvergeError::UnsafeUps("ups.status is empty".into()));
     }
+    if crate::doctor::status_awaits_driver(status) {
+        return Err(ConvergeError::UnsafeUps(
+            "upsd is still waiting for the driver's first data dump (ups.status WAIT)".into(),
+        ));
+    }
     if !flags.iter().any(|flag| flag == "OL") {
         return Err(ConvergeError::UnsafeUps(format!(
             "UPS is not on line power: {status}"
@@ -344,7 +350,8 @@ fn require_observation_safe(ups: &UpsEvidence) -> Result<(), ConvergeError> {
 /// Fresh safe-online check against the live UPS, used immediately before
 /// disruptive service effects so a loss of OL between steps stops the apply.
 /// Unavailable evidence (upsd not listening yet, stale or unconnected driver
-/// data) is re-observed within the bounded settle window because the server
+/// data, or upsd's `WAIT` placeholder before the driver's first dump) is
+/// re-observed within the bounded settle window because the server or driver
 /// may have just been started; an explicit unsafe status refuses at once.
 fn require_fresh_safe_online<H: Host>(host: &H, ups_name: &str) -> Result<(), ConvergeError> {
     let mut attempt = 1;
@@ -361,13 +368,13 @@ fn require_fresh_safe_online<H: Host>(host: &H, ups_name: &str) -> Result<(), Co
 }
 
 /// Whether a UPS reading carries no status evidence at all, as opposed to an
-/// explicit (possibly unsafe) status.
+/// explicit (possibly unsafe) status. upsd's connect-time `WAIT` placeholder
+/// counts as no evidence: the driver has not answered its first dump yet.
 fn evidence_unavailable(observed: &crate::host::UpsObservation) -> bool {
     observed.vars_error.is_some()
-        || observed
-            .vars
-            .get("ups.status")
-            .is_none_or(|status| status.trim().is_empty())
+        || observed.vars.get("ups.status").is_none_or(|status| {
+            status.trim().is_empty() || crate::doctor::status_awaits_driver(status)
+        })
 }
 
 /// Whether every verification failure is a readiness gap of a just-started
@@ -2631,6 +2638,53 @@ mod tests {
                 .unwrap()
                 .is_some()
         );
+    }
+
+    /// upsd's connect-time reading before the driver answers its first dump.
+    fn awaiting_driver() -> UpsObservation {
+        UpsObservation {
+            vars: BTreeMap::from([("ups.status".into(), "WAIT".into())]),
+            ..ol()
+        }
+    }
+
+    #[test]
+    fn monitor_gate_waits_for_the_driver_dump() {
+        // A just-restarted upsd reports `WAIT` until the driver's first dump.
+        let host = with_observations(fixture_host(), 5, ol())
+            .with_ups_observation(awaiting_driver())
+            .with_ups_observation(awaiting_driver());
+        let host = with_observations(host, 2, ol());
+        let hash = expect_plan(&host, false);
+        let report =
+            converge(&host, &options(hash, false)).expect("converges after the driver dump");
+        assert!(report.state_finalized);
+        assert_eq!(host.slept(), SETTLE_INTERVAL * 2);
+    }
+
+    #[test]
+    fn monitor_gate_refuses_when_the_driver_never_dumps() {
+        let host = with_observations(fixture_host(), 5, ol());
+        let host = with_observations(host, SETTLE_ATTEMPTS as usize, awaiting_driver());
+        let hash = expect_plan(&host, false);
+        let error = converge(&host, &options(hash, false)).unwrap_err();
+        assert!(
+            matches!(&error, ConvergeError::UnsafeUps(detail) if detail.contains("WAIT")),
+            "unexpected error: {error:?}"
+        );
+        assert_eq!(host.slept(), SETTLE_INTERVAL * (SETTLE_ATTEMPTS - 1));
+    }
+
+    #[test]
+    fn verification_waits_for_the_driver_dump() {
+        let host = with_observations(fixture_host(), 6, ol())
+            .with_ups_observation(awaiting_driver())
+            .with_ups_observation(ol());
+        let hash = expect_plan(&host, false);
+        let report =
+            converge(&host, &options(hash, false)).expect("verifies after the driver dump");
+        assert!(report.state_finalized);
+        assert_eq!(host.slept(), SETTLE_INTERVAL);
     }
 
     #[test]

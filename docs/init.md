@@ -83,7 +83,8 @@ possibilities. Unrelated drift requires a fresh reviewed plan.
 needs root and confirmation (`--yes` for reviewed automation/CI). Rollback
 restores original bytes and metadata, removes files that were absent before
 init, reverses only recorded membership additions, and restores recorded
-service enable/active state under the same safe-online gate.
+service enable/active state under the same safe-online gate (stops after the
+monitor is down need no fresh reading).
 
 Installed distribution packages and package-owned users are retained. Rollback
 does not uninstall `nut-client`/`nut-server` or restore `/etc/group` from a

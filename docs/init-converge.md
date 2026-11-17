@@ -21,9 +21,11 @@ start or restart of the monitor, and every disruption of an already configured
 stack, needs a fresh OL reading with none of OB, LB, or FSD immediately
 before the effect. An install from empty may start its driver and server to
 obtain its first reading. Ubuntu's NUT 2.8.1 runs upsd and upsmon as
-`Type=simple` units, so a just-started server may not be listening yet: an
-unavailable or stale reading is re-observed every 0.5 s for about 15 s,
-while an explicit OB, LB, or FSD reading refuses at once. Service outcomes are recorded only after verifying
+`Type=simple` units, so a just-started server may not be listening yet, and
+a server that just connected to its driver publishes only `ups.status: WAIT`
+until the driver answers its first dump: an unavailable, stale, or `WAIT`
+reading is re-observed every 0.5 s for about 15 s, while an explicit OB, LB,
+or FSD reading refuses at once. Service outcomes are recorded only after verifying
 the unit reached the desired state; a zero exit code alone never counts. No
 code path runs power commands.
 
@@ -37,7 +39,7 @@ non-strict semantics and no observation sleeps. Warnings stay warnings; any
 failure, or unavailable required protection evidence, fails verification.
 While every failure is only a readiness gap of a just-started unit (driver,
 server, or monitor inactive, nothing listening, no logged-in monitor client,
-or no UPS data at all), the pass is repeated within the same bounded settle
+or no UPS data yet, including upsd's `WAIT` placeholder), the pass is repeated within the same bounded settle
 window; any other failure, including an on-battery reading, fails at once. On
 failure, converge restores touched files and service enable/active states from
 the recorded preimages, keeps the backup and the recovery record, and reports

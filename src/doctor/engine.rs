@@ -38,7 +38,7 @@ pub const CATALOG: &[CatalogEntry] = &[
         id: "hw.data",
         section: Section::Hardware,
         title: "UPS data is fresh",
-        docs: "upsd answers LIST VAR without DATA-STALE or DRIVER-NOT-CONNECTED.",
+        docs: "upsd answers LIST VAR without DATA-STALE or DRIVER-NOT-CONNECTED, and `ups.status` is not upsd's connect-time `WAIT` placeholder.",
         needs_root: false,
     },
     CatalogEntry {

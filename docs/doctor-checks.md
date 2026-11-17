@@ -32,7 +32,7 @@ Needs root: no
 
 ### `hw.data`
 
-upsd answers LIST VAR without DATA-STALE or DRIVER-NOT-CONNECTED.
+upsd answers LIST VAR without DATA-STALE or DRIVER-NOT-CONNECTED, and `ups.status` is not upsd's connect-time `WAIT` placeholder.
 
 Needs root: no
 

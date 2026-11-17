@@ -33,7 +33,8 @@ These rules apply to every command and implementation phase.
   unresolved until freshly observed. Rollback validates the complete backup, uses the
   same writer lock, and records resumable progress. It restores only recorded targets
   and account additions, retains installed packages and package-owned users, and
-  requires fresh safe-online UPS evidence before changing service activity. See
+  requires fresh safe-online UPS evidence before starting a service or stopping one
+  while the monitor runs. See
   [init rollback](init-rollback.md).
 5. **Keep recipes offline.** Build and test recipes must never touch a real UPS,
    power anything off, or implicitly contact another host. Any recipe that

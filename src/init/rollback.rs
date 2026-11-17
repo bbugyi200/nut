@@ -4,8 +4,8 @@
 //!
 //! Rollback reuses the init writer lock and private backup format. It restores
 //! only recorded files and membership additions, keeps installed packages and
-//! package-owned users, and never starts a NUT service without a fresh OL
-//! observation.
+//! package-owned users, and never starts a NUT service, or stops one while
+//! the monitor runs, without a fresh OL observation.
 
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
@@ -25,6 +25,7 @@ use super::transaction::{
 use crate::host::{FileMetadata, Host, HostError, ProcessOutput, ProcessRequest};
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
+const MONITOR_UNIT: &str = "nut-monitor.service";
 const MAX_ROLLBACK_BYTES: usize = 1024 * 1024;
 const RETAINED_PACKAGES: &str =
     "Installed distribution packages and package-owned users are retained.";
@@ -591,7 +592,9 @@ fn restore_service<H: Host>(
             detail: "the backed-up NUT configuration is absent; rollback will not start a driver or monitor".into(),
         });
     }
-    ensure_safe_online(host, &backup.summary.stamp, options)?;
+    if expected_active == "active" || stop_needs_online_evidence(host, &expected.unit)? {
+        ensure_safe_online(host, &backup.summary.stamp, options)?;
+    }
     let verb = if expected_active == "active" {
         "start"
     } else {
@@ -690,6 +693,21 @@ fn service_activity_rank(service: &ServiceSnapshot) -> usize {
 
 fn service_enablement_rank(_service: &ServiceSnapshot) -> usize {
     0
+}
+
+/// Whether stopping `unit` happens while upsmon could act on it. Stopping
+/// upsmon itself, or losing the driver or server under a running upsmon (a
+/// communications loss it acts on), needs a fresh OL reading. Once the
+/// monitor is down no shutdown authority remains, so the server, driver, and
+/// target stop without one: upsd, the only evidence source, may already have
+/// been stopped by this rollback. Any monitor state other than inactive or
+/// failed counts as running.
+fn stop_needs_online_evidence<H: Host>(host: &H, unit: &str) -> Result<bool, RollbackError> {
+    if unit == MONITOR_UNIT {
+        return Ok(true);
+    }
+    let monitor = process_text(host, "systemctl", &["is-active", MONITOR_UNIT])?;
+    Ok(!matches!(monitor.as_str(), "inactive" | "failed"))
 }
 
 fn ensure_safe_online<H: Host>(
@@ -1405,5 +1423,111 @@ mod tests {
             restarted.read_protected(Path::new(STATE_PATH)).unwrap(),
             None
         );
+    }
+
+    fn inactive_snapshot(unit: &str) -> ServiceSnapshot {
+        ServiceSnapshot {
+            unit: unit.to_owned(),
+            active: "inactive".to_owned(),
+            enabled: "enabled".to_owned(),
+        }
+    }
+
+    fn stops_effects(host: &FakeHost) -> Vec<String> {
+        host.effects()
+            .iter()
+            .filter_map(|effect| match effect {
+                HostEffect::Run { program, args }
+                    if program == OsStr::new("systemctl")
+                        && args.first().is_some_and(|arg| arg == "stop") =>
+                {
+                    args.get(1).map(|unit| unit.to_string_lossy().into_owned())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rollback_stops_server_and_driver_after_the_monitor_without_upsd() {
+        // Before init every unit was inactive. Only the monitor stop needs a
+        // fresh OL reading; once upsmon is down, rollback stops upsd and then
+        // the driver although upsd no longer answers.
+        let driver = "nut-driver@cp1500.service";
+        let mut host = base(Some(b"before")).with_ups_observation(ups("OL CHRG"));
+        for unit in [MONITOR_UNIT, "nut-server.service", driver] {
+            host = host
+                .queue_program("systemctl", ["is-active", unit], output(0, "active\n"))
+                .queue_program("systemctl", ["is-enabled", unit], output(0, "enabled\n"));
+            if unit != MONITOR_UNIT {
+                host = host.queue_program(
+                    "systemctl",
+                    ["is-active", MONITOR_UNIT],
+                    output(3, "inactive\n"),
+                );
+            }
+            host = host
+                .queue_program("systemctl", ["stop", unit], output(0, ""))
+                .queue_program("systemctl", ["is-active", unit], output(3, "inactive\n"))
+                .queue_program("systemctl", ["is-enabled", unit], output(0, "enabled\n"));
+        }
+        let services = vec![
+            inactive_snapshot(driver),
+            inactive_snapshot("nut-server.service"),
+            inactive_snapshot(MONITOR_UNIT),
+        ];
+        let stamp = complete_init(&host, Some(b"after"), services, vec![], vec![], vec![]);
+
+        let report = restore(&host, Some(&stamp), &RollbackOptions::default())
+            .unwrap_or_else(|error| panic!("rollback failed: {error:?}"));
+        assert_eq!(
+            report.services_changed,
+            vec![MONITOR_UNIT, "nut-server.service", driver]
+        );
+        assert_eq!(
+            stops_effects(&host),
+            vec![MONITOR_UNIT, "nut-server.service", driver]
+        );
+        assert_eq!(
+            host.effects()
+                .iter()
+                .filter(|effect| matches!(effect, HostEffect::ObserveUps { .. }))
+                .count(),
+            1
+        );
+        assert_eq!(
+            host.read_protected(Path::new(TARGET)).unwrap().as_deref(),
+            Some(&b"before"[..])
+        );
+    }
+
+    #[test]
+    fn stopping_the_driver_under_a_running_monitor_needs_fresh_evidence() {
+        // upsmon stays active (not part of this backup), so losing the driver
+        // is a communications loss it acts on: an unreachable upsd refuses.
+        let driver = "nut-driver@cp1500.service";
+        let host = base(Some(b"before"))
+            .queue_program("systemctl", ["is-active", driver], output(0, "active\n"))
+            .queue_program("systemctl", ["is-enabled", driver], output(0, "enabled\n"))
+            .queue_program(
+                "systemctl",
+                ["is-active", MONITOR_UNIT],
+                output(0, "active\n"),
+            );
+        let stamp = complete_init(
+            &host,
+            Some(b"after"),
+            vec![inactive_snapshot(driver)],
+            vec![],
+            vec![],
+            vec![],
+        );
+
+        let error = restore(&host, Some(&stamp), &RollbackOptions::default()).unwrap_err();
+        assert!(
+            matches!(error, RollbackError::UnsafeUps(_)),
+            "unexpected error: {error:?}"
+        );
+        assert!(stops_effects(&host).is_empty());
     }
 }

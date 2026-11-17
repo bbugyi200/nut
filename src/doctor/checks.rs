@@ -292,6 +292,17 @@ fn hw_data(entry: &CatalogEntry, snapshot: &Snapshot) -> Check {
             "check nut-server; then: nut doctor",
         );
     }
+    if snapshot
+        .vars
+        .get("ups.status")
+        .is_some_and(|status| super::status_awaits_driver(status))
+    {
+        return fail(
+            entry,
+            "upsd is waiting for the driver's first data dump (ups.status WAIT)",
+            "check nut-driver; then: nut doctor",
+        );
+    }
     pass(
         entry,
         format!(
