@@ -220,7 +220,9 @@ pub fn serve_client(mut stream: TcpStream, fixture: &mut FakeUpsdFixture) -> io:
                         quote_value(value)
                     )?;
                 } else {
-                    writeln!(stream, "ERR UNKNOWN-VAR {name}")?;
+                    // Match real upsd 2.8.1: unsupported variables report
+                    // VAR-NOT-SUPPORTED (dummy-ups has no beeper variable).
+                    writeln!(stream, "ERR VAR-NOT-SUPPORTED {name}")?;
                 }
             }
             ["LIST", "CMD", ups] if ups.eq_ignore_ascii_case(&fixture.ups_name) => {

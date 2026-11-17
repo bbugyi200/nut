@@ -377,7 +377,10 @@ impl UpsdClient {
         }
     }
 
-    /// Read one variable. Returns `None` when the server reports UNKNOWN-VAR.
+    /// Read one variable. Returns `None` when the server reports the
+    /// variable is missing. Real upsd 2.8.1 answers `ERR VAR-NOT-SUPPORTED`
+    /// for driver-unsupported variables (dummy-ups has no beeper); older
+    /// servers answer `ERR UNKNOWN-VAR`. Both mean "not reported".
     pub fn get_var(&mut self, name: &str) -> Result<Option<String>, UpsdError> {
         if !is_valid_var_name(&name.to_ascii_lowercase()) || name.len() > 63 {
             return Err(UpsdError::Protocol(format!(
@@ -387,7 +390,11 @@ impl UpsdClient {
         self.write_command(&format!("GET VAR {} {name}", self.ups))?;
         let line = self.read_response_line()?;
         match parse_server_error(&line) {
-            Some(UpsdError::Server { code, .. }) if code == "UNKNOWN-VAR" => Ok(None),
+            Some(UpsdError::Server { code, .. })
+                if code == "UNKNOWN-VAR" || code == "VAR-NOT-SUPPORTED" =>
+            {
+                Ok(None)
+            }
             Some(error) => Err(error),
             None => {
                 let (ups, var, value) = parse_var_response(&line)?;
