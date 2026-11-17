@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Include operator hook messages stored in per-user journals in event history,
+  follow, and follow cursors. Keep the system-journal access check so a partial
+  unprivileged view is still reported as needing root.
+
 - Fix adoption retirement to validate the legacy hook against the rendered
   replacement, including interrupted retirement and a no-op second init.
 - Supply trusted system executable directories when a privileged runner omits

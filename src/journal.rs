@@ -194,7 +194,10 @@ pub fn check_access<H: Host>(host: &H) -> Result<(), JournalError> {
 }
 
 pub fn query_args(args: &EventsArgs, verbose: bool, after: Option<&str>) -> Vec<OsString> {
-    let mut result: Vec<OsString> = ["--system", "--no-pager", "-o", "json"]
+    // Hook notifications invoked by an operator live in per-user journals when
+    // journald splits by UID. Keep the system-access probe, but query every
+    // accessible journal so those entries survive adoption and follow reads.
+    let mut result: Vec<OsString> = ["--no-pager", "-o", "json"]
         .into_iter()
         .map(Into::into)
         .collect();
@@ -366,7 +369,6 @@ pub fn follow<H: Host>(
 /// Establish a cursor even when no NUT entries matched, avoiding a read/follow race.
 pub fn tail_cursor<H: Host>(host: &H) -> Result<String, JournalError> {
     let args: Vec<OsString> = [
-        "--system",
         "--no-pager",
         "-o",
         "json",
@@ -433,6 +435,17 @@ pub(crate) mod tests {
             .with_program_args(
                 "journalctl",
                 [
+                    "--no-pager",
+                    "-o",
+                    "json",
+                    "--lines=1",
+                    "--output-fields=__CURSOR",
+                ],
+                output(b"{\"__CURSOR\":\"tail\"}"),
+            )
+            .with_program_args(
+                "journalctl",
+                [
                     "--system",
                     "--no-pager",
                     "--list-boots",
@@ -467,6 +480,61 @@ pub(crate) mod tests {
         let history = read(&fixture_host(), &Default::default(), true).unwrap();
         assert_eq!(history.entries.len(), 19);
         assert!(!history.truncated);
+    }
+
+    #[test]
+    fn history_and_follow_preserve_user_journal_hook_notifications() {
+        let args = EventsArgs::default();
+        let records = [
+            serde_json::json!({"__REALTIME_TIMESTAMP":"100", "SYSLOG_IDENTIFIER":"athena-upssched", "MESSAGE":"test-notify: test notification"}),
+            serde_json::json!({"__REALTIME_TIMESTAMP":"200", "SYSLOG_IDENTIFIER":"nut-upssched", "MESSAGE":"test-notify: test notification"}),
+        ]
+        .map(|record| record.to_string())
+        .join("\n");
+        // Model journald SplitMode=uid: root can read these hook records, but
+        // --system excludes the journal written by the unprivileged operator.
+        for verbose in [false, true] {
+            let mut host = FakeHost::default()
+                .with_euid(0)
+                .with_program("journalctl", output(b""));
+            for after in [None, Some("cursor")] {
+                let mut all_journals = query_args(&args, verbose, after);
+                all_journals.retain(|arg| arg != "--system");
+                host =
+                    host.with_program_args("journalctl", all_journals, output(records.as_bytes()));
+            }
+            let history = read(&host, &args, verbose).unwrap();
+            assert_eq!(history.entries.len(), 2);
+            assert_eq!(history.entries[0].source, "athena-upssched");
+            assert_eq!(history.entries[1].source, "nut-upssched");
+            let mut followed = Vec::new();
+            follow(&host, &args, verbose, "cursor", &mut |line| {
+                followed.push(Entry::parse(line)?);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(followed.len(), 2);
+        }
+    }
+
+    #[test]
+    fn follow_cursor_can_come_from_a_user_journal() {
+        let host = FakeHost::default()
+            .with_euid(0)
+            .with_program("journalctl", output(b""))
+            .with_program_args(
+                "journalctl",
+                [
+                    "--no-pager",
+                    "-o",
+                    "json",
+                    "--lines=1",
+                    "--output-fields=__CURSOR",
+                ],
+                output(b"{\"__CURSOR\":\"user-hook-tail\"}"),
+            );
+        check_access(&host).unwrap();
+        assert_eq!(tail_cursor(&host).unwrap(), "user-hook-tail");
     }
 
     #[test]

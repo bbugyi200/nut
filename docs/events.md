@@ -1,8 +1,12 @@
 # Journal events and outage stories
 
-`nut events` reads the local **system** journal without changing NUT or the UPS.
+`nut events` reads accessible local system and user journals without changing NUT or the UPS.
 It includes `upsmon`, `upssched`, `nut-upssched`, and the legacy `athena-upssched`
 tag, so adopting the new hook does not discard older history.
+User journals matter when an operator runs `nut notify test`: journald can store
+that hook's messages separately from the NUT services' system messages. History,
+follow, and the initial follow cursor use the same journal scope. The separate
+system-access check still refuses a partial view from an unprivileged account.
 
 ```sh
 nut events                         # latest 20 stories
@@ -68,7 +72,7 @@ than returning a fabricated story. The default 20-story display limit is applied
 deduplicating entries already in the initial view. It flushes each changed story
 as it arrives, including a later completion of a pending outage. Stop with Ctrl-C.
 Memory stays bounded by the same retained history limits. In verbose mode,
-snapshot tag and unit queries are merged; follow reads and filters the system
+snapshot tag and unit queries are merged; follow reads and filters the journal
 stream locally because journalctl intersects tag and unit filters.
 
 JSON documents have `schema_version: 1`, an access state, truncation and boot
