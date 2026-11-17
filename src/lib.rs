@@ -138,8 +138,6 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32,
             Ok(0)
         }
         Command::Status(args) => {
-            let _ = bios::write_pending_reminder(host, cli.ascii, stdout)?;
-            drill::write_pending_reminder(host, cli.ascii, stdout)?;
             status::run_status(
                 args,
                 status::OutputOptions {

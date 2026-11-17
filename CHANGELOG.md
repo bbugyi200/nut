@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fix adoption retirement to validate the legacy hook against the rendered
+  replacement, including interrupted retirement and a no-op second init.
+- Supply trusted system executable directories when a privileged runner omits
+  PATH; preserve explicitly configured paths. Keep non-root status, BIOS and
+  proof views usable with private state, reporting evidence as needing root.
+  Status JSON carries reminders inside its document. Strict action readers and
+  private directory permissions are unchanged.
+
 - Resume interrupted init group creation before observing dependent, still-planned
   memberships. Started and completed membership checks still reject a missing
   group; each planned operation is checked when it executes in journal order.

@@ -46,6 +46,8 @@ struct StatusDocument {
     last_outage: Option<crate::journal::Story>,
     #[serde(skip_serializing_if = "Option::is_none")]
     on_battery_since_us: Option<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    reminders: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -115,8 +117,17 @@ pub fn run_status<H: Host, W: Write>(
                 .map_err(|error| NutError::operational(format!("cannot write output: {error}")))?;
         }
         if options.json {
+            document.reminders = [
+                crate::bios::pending_reminder(host)?,
+                crate::drill::pending_reminder(host)?,
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
             write_json(stdout, &document)?;
         } else {
+            crate::bios::write_pending_reminder(host, options.ascii, stdout)?;
+            crate::drill::write_pending_reminder(host, options.ascii, stdout)?;
             render_status(stdout, &document, &ui, options.verbose)?;
         }
         if !args.watch {
@@ -263,6 +274,7 @@ fn fetch_status<H: Host>(
         raw_variables: include_all.then_some(variables),
         last_outage: None,
         on_battery_since_us: None,
+        reminders: Vec::new(),
     })
 }
 
@@ -646,6 +658,7 @@ mod tests {
             raw_variables: None,
             last_outage: None,
             on_battery_since_us: None,
+            reminders: Vec::new(),
         };
         add_journal(&host, None, &mut document);
         assert_eq!(document.on_battery_since_us, Some(1_700_000_700_000_000));
@@ -695,50 +708,71 @@ mod tests {
 
     #[test]
     fn status_json_uses_scripted_upsd_and_configured_shutdown_timeline() {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let mut fixture = FakeUpsdFixture {
-            ups_name: "demo".into(),
-            description: "Scripted demo UPS".into(),
-            variables: BTreeMap::from([
-                ("ups.status".into(), "OB DISCHRG".into()),
-                ("battery.charge".into(), "82".into()),
-                ("battery.runtime".into(), "1550".into()),
-                ("ups.load".into(), "28".into()),
-            ]),
-            ..Default::default()
+        for state in ["absent", "private", "pending"] {
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let mut fixture = FakeUpsdFixture {
+                ups_name: "demo".into(),
+                description: "Scripted demo UPS".into(),
+                variables: BTreeMap::from([
+                    ("ups.status".into(), "OB DISCHRG".into()),
+                    ("battery.charge".into(), "82".into()),
+                    ("battery.runtime".into(), "1550".into()),
+                    ("ups.load".into(), "28".into()),
+                ]),
+                ..Default::default()
+            };
+            let server = thread::spawn(move || {
+                let (stream, _) = listener.accept().unwrap();
+                serve_client(stream, &mut fixture).unwrap();
+            });
+            let config = "schema = 1\n\n[host]\nname = \"demo\"\n\n[ups.demo]\nprofile = \"dummy\"\n\n[shutdown]\nnotify_after = \"30s\"\nearly_after = \"180s\"\npoweroff_wait = \"30m\"\nshutdown_budget = \"2m\"\n\n[notify]\nfrom = \"root@example.invalid\"\nto = \"operator@example.invalid\"\ncommbad_after = \"60s\"\n";
+            let host = FakeHost::default()
+                .with_file("/test/host.toml", config.as_bytes())
+                .with_env("LANG", "C.UTF-8");
+            let host = match state {
+            "private" => host.with_euid(1000)
+                .with_unreadable("/var/lib/nut-cli/bios/pending.json")
+                .with_unreadable("/var/lib/nut-cli/drills/pending.json"),
+            "pending" => host.with_file("/var/lib/nut-cli/bios/pending.json",
+                br#"{"schema_version":1,"profile_id":"generic","bios_version":null,"recorded_unix":1}"#),
+            _ => host,
         };
-        let server = thread::spawn(move || {
-            let (stream, _) = listener.accept().unwrap();
-            serve_client(stream, &mut fixture).unwrap();
-        });
-        let config = "schema = 1\n\n[host]\nname = \"demo\"\n\n[ups.demo]\nprofile = \"dummy\"\n\n[shutdown]\nnotify_after = \"30s\"\nearly_after = \"180s\"\npoweroff_wait = \"30m\"\nshutdown_budget = \"2m\"\n\n[notify]\nfrom = \"root@example.invalid\"\nto = \"operator@example.invalid\"\ncommbad_after = \"60s\"\n";
-        let host = FakeHost::default()
-            .with_file("/test/host.toml", config.as_bytes())
-            .with_env("LANG", "C.UTF-8");
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        let args = [
-            "nut".to_owned(),
-            "--json".into(),
-            "--config".into(),
-            "/test/host.toml".into(),
-            "status".into(),
-            "--upsd-port".into(),
-            port.to_string(),
-        ];
-        let code = crate::run_with_host(args, &host, &mut stdout, &mut stderr);
-        server.join().unwrap();
-        assert_eq!(code, 0);
-        assert!(stderr.is_empty());
-        let output: serde_json::Value = serde_json::from_slice(&stdout).unwrap();
-        assert_eq!(output["schema_version"], 1);
-        assert_eq!(output["status"]["summary"], "On battery, discharging");
-        assert_eq!(output["battery"]["runtime_seconds"], 1550);
-        assert_eq!(
-            output["timeline"]["estimated_runtime_after_shutdown_seconds"],
-            1370
-        );
-        assert!(output.get("raw_variables").is_none());
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let args = [
+                "nut".to_owned(),
+                "--json".into(),
+                "--config".into(),
+                "/test/host.toml".into(),
+                "status".into(),
+                "--upsd-port".into(),
+                port.to_string(),
+            ];
+            let code = crate::run_with_host(args, &host, &mut stdout, &mut stderr);
+            server.join().unwrap();
+            assert_eq!(code, 0);
+            assert!(stderr.is_empty());
+            let output: serde_json::Value = serde_json::from_slice(&stdout).unwrap();
+            assert_eq!(output["schema_version"], 1);
+            assert_eq!(output["status"]["summary"], "On battery, discharging");
+            assert_eq!(output["battery"]["runtime_seconds"], 1550);
+            assert_eq!(
+                output["timeline"]["estimated_runtime_after_shutdown_seconds"],
+                1370
+            );
+            assert!(output.get("raw_variables").is_none());
+            match state {
+                "absent" => assert!(output.get("reminders").is_none()),
+                "private" => assert_eq!(output["reminders"].as_array().unwrap().len(), 2),
+                "pending" => assert!(
+                    output["reminders"][0]
+                        .as_str()
+                        .unwrap()
+                        .contains("attestation pending")
+                ),
+                _ => unreachable!(),
+            }
+        }
     }
 }

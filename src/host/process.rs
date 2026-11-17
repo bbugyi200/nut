@@ -4,6 +4,20 @@ use std::time::{Duration, Instant};
 
 use super::{HostError, ProcessOutput, ProcessRequest};
 
+const SYSTEM_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+/// Reviewed privilege runners may omit PATH entirely. Preserve an explicitly
+/// supplied path (including an empty one); only absence gets trusted directories.
+pub(super) fn command(program: &std::ffi::OsStr) -> Command {
+    command_with_path(program, std::env::var_os("PATH"))
+}
+
+fn command_with_path(program: &std::ffi::OsStr, path: Option<std::ffi::OsString>) -> Command {
+    let mut command = Command::new(program);
+    command.env("PATH", path.unwrap_or_else(|| SYSTEM_PATH.into()));
+    command
+}
+
 const MAX_CAPTURE_BYTES: usize = 1024 * 1024;
 
 struct Process(Child);
@@ -20,7 +34,7 @@ pub(super) fn run_bounded(request: &ProcessRequest<'_>) -> Result<ProcessOutput,
         return run_inherited(request);
     }
     let mut child = Process(
-        Command::new(request.program)
+        command(request.program)
             .args(request.args)
             .env("LC_ALL", "C")
             .stdin(Stdio::null())
@@ -67,7 +81,7 @@ pub(super) fn run_bounded(request: &ProcessRequest<'_>) -> Result<ProcessOutput,
 
 fn run_inherited(request: &ProcessRequest<'_>) -> Result<ProcessOutput, HostError> {
     let mut child = Process(
-        Command::new(request.program)
+        command(request.program)
             .args(request.args)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
@@ -142,6 +156,26 @@ mod tests {
     use crate::host::{Host, SystemHost};
     use std::ffi::{OsStr, OsString};
     use std::time::Duration;
+
+    #[test]
+    fn absent_path_finds_system_commands_and_preserves_explicit_paths() {
+        let output = command_with_path(OsStr::new("groupadd"), None)
+            .arg("--help")
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        for path in ["", "/test/explicit/bin"] {
+            let command = command_with_path(OsStr::new("true"), Some(path.into()));
+            assert_eq!(
+                command
+                    .get_envs()
+                    .find(|(key, _)| *key == "PATH")
+                    .unwrap()
+                    .1,
+                Some(OsStr::new(path))
+            );
+        }
+    }
 
     #[test]
     fn bounded_run_times_out_without_including_output() {

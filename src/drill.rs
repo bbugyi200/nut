@@ -689,21 +689,31 @@ fn read_journal_observations<H: Host>(
     Ok(observations)
 }
 
+pub fn pending_reminder<H: Host>(host: &H) -> Result<Option<String>, NutError> {
+    let (record, needs_root) = observe_record(host, Path::new(PENDING_PATH))?;
+    if needs_root {
+        return Ok(Some(
+            "Drill evidence needs root; run `sudo nut drill`".into(),
+        ));
+    }
+    Ok(record.map(|record| {
+        format!(
+            "Drill report pending: {} · run `sudo nut drill report`",
+            record.drill.slug()
+        )
+    }))
+}
+
 pub fn write_pending_reminder<H: Host, W: Write>(
     host: &H,
     ascii: bool,
     stdout: &mut W,
 ) -> Result<(), NutError> {
-    let Some(record) = load_record(host, Path::new(PENDING_PATH))? else {
+    let Some(message) = pending_reminder(host)? else {
         return Ok(());
     };
     let glyph = if ascii { "!!" } else { "⚠" };
-    writeln!(
-        stdout,
-        "{glyph} Drill report pending: {} · run `sudo nut drill report`",
-        record.drill.slug()
-    )
-    .map_err(output_error)
+    writeln!(stdout, "{glyph} {message}").map_err(output_error)
 }
 
 fn show_table<H: Host, W: Write>(
@@ -732,11 +742,12 @@ fn show_table<H: Host, W: Write>(
         context.config.as_ref(),
         version.as_deref(),
     );
-    let pending = load_record(host, Path::new(PENDING_PATH))?;
+    let (pending, pending_needs_root) = observe_record(host, Path::new(PENDING_PATH))?;
     let mut rows = Vec::new();
     for kind in DrillKind::ALL {
-        let record = load_record(host, &record_path(kind))?;
+        let (record, needs_root) = observe_record(host, &record_path(kind))?;
         let state = match record.as_ref() {
+            None if needs_root => "needs root · run `sudo nut drill`".to_owned(),
             None => "never drilled".to_owned(),
             Some(record) => match (record.passed, pins.as_ref()) {
                 (None, _) => "not reported".to_owned(),
@@ -764,6 +775,7 @@ fn show_table<H: Host, W: Write>(
             &json!({
                 "schema_version": 1,
                 "pending": pending.as_ref().map(|record| record.drill.slug()),
+                "pending_needs_root": pending_needs_root,
                 "proofs": rows,
             }),
         )
@@ -772,6 +784,13 @@ fn show_table<H: Host, W: Write>(
         return Ok(());
     }
     writeln!(stdout, "nut drill · proof table").map_err(output_error)?;
+    if pending_needs_root {
+        writeln!(
+            stdout,
+            "  Pending drill evidence needs root · run `sudo nut drill`"
+        )
+        .map_err(output_error)?;
+    }
     if let Some(record) = pending {
         let pending_glyph = if ascii { "!!" } else { "⚠" };
         writeln!(
@@ -881,6 +900,16 @@ fn load_record<H: Host>(host: &H, path: &Path) -> Result<Option<DrillRecord>, Nu
         return Ok(None);
     };
     parse_record(&bytes)
+}
+
+/// Views can report unreadable evidence without weakening strict action readers.
+fn observe_record<H: Host>(host: &H, path: &Path) -> Result<(Option<DrillRecord>, bool), NutError> {
+    match host.read_file(path) {
+        Ok(Some(bytes)) => Ok((parse_record(&bytes)?, false)),
+        Ok(None) => Ok((None, false)),
+        Err(error) if host.euid() != 0 && error.is_permission_denied() => Ok((None, true)),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn parse_record(bytes: &[u8]) -> Result<Option<DrillRecord>, NutError> {
@@ -1032,6 +1061,24 @@ mod tests {
     use std::net::TcpListener;
     use std::path::Path;
     use std::thread;
+
+    #[test]
+    fn private_drill_views_do_not_weaken_strict_action_reads() {
+        let host = FakeHost::default()
+            .with_euid(1000)
+            .with_unreadable(PENDING_PATH);
+        assert!(
+            pending_reminder(&host)
+                .unwrap()
+                .unwrap()
+                .contains("needs root")
+        );
+        assert!(load_record(&host, Path::new(PENDING_PATH)).is_err());
+        assert!(observe_record(&host, Path::new(PENDING_PATH)).unwrap().1);
+        assert!(observe_record(&host.with_euid(0), Path::new(PENDING_PATH)).is_err());
+        let malformed = FakeHost::default().with_file(PENDING_PATH, b"not JSON");
+        assert!(pending_reminder(&malformed).is_err());
+    }
 
     fn pending_record(kind: DrillKind, pins: EvidencePins) -> DrillRecord {
         DrillRecord {

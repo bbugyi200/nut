@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 use std::io::{BufRead, BufReader, Read};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::mpsc::{self, SyncSender};
 use std::time::{Duration, Instant};
 
@@ -52,7 +52,7 @@ pub(super) fn run(
     line: &mut dyn FnMut(&[u8]) -> Result<(), HostError>,
 ) -> Result<ProcessOutput, HostError> {
     let mut child = Process(
-        Command::new(program)
+        super::process::command(program)
             .args(args)
             .env("LC_ALL", "C")
             .stdin(Stdio::null())

@@ -11,9 +11,9 @@ use crate::firmware::audit::{BootCheck, CheckStatus, audit_boot};
 use crate::firmware::backend::SettingReading;
 use crate::firmware::{
     AttestationAnswer, AttestationFreshness, AttestationReceipt, DmiInfo, PendingMarker,
-    backend_for, clear_pending, efivar_fingerprint, firmware_setup_supported, freshness,
-    load_board_catalog, load_pending, load_receipt, pending_path, receipt_path, resolve_profile,
-    save_json, unix_secs,
+    backend_for, clear_pending, efivar_fingerprint, firmware_setup_supported, load_board_catalog,
+    load_pending, observe_attestation, pending_path, receipt_path, resolve_profile, save_json,
+    unix_secs,
 };
 use crate::host::Host;
 use crate::profiles::{BoardProfile, ProfileCatalog, ProfileId};
@@ -61,21 +61,29 @@ pub fn run<H: Host, W: Write>(
     }
 }
 
+pub fn pending_reminder<H: Host>(host: &H) -> Result<Option<String>, NutError> {
+    match load_pending(host) {
+        Ok(None) => Ok(None),
+        Ok(Some(_)) => Ok(Some(
+            "BIOS attestation pending; run `sudo nut bios attest`".into(),
+        )),
+        Err(error) if host.euid() != 0 && error.is_permission_denied() => {
+            Ok(Some("BIOS evidence needs root; run `sudo nut bios`".into()))
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
 pub fn write_pending_reminder<H: Host, W: Write>(
     host: &H,
     ascii: bool,
     stdout: &mut W,
 ) -> Result<bool, NutError> {
-    if load_pending(host)?.is_none() {
+    let Some(message) = pending_reminder(host)? else {
         return Ok(false);
-    }
+    };
     let glyphs = Glyphs::new(ascii, host.env("TERM").as_deref(), None);
-    writeln!(
-        stdout,
-        " {} BIOS attestation pending  {} sudo nut bios attest",
-        glyphs.pending, glyphs.arrow
-    )
-    .map_err(write_error)?;
+    writeln!(stdout, " {} {message}", glyphs.pending).map_err(write_error)?;
     Ok(true)
 }
 
@@ -621,14 +629,7 @@ fn collect_report<H: Host>(
     _verbose: bool,
 ) -> Result<BiosReport, NutError> {
     let fingerprint = efivar_fingerprint(host, &profile.fingerprint_efivars)?;
-    let receipt = load_receipt(host)?;
-    let pending = load_pending(host)?;
-    let freshness = freshness(
-        pending.as_ref(),
-        receipt.as_ref(),
-        dmi,
-        fingerprint.as_deref(),
-    );
+    let (receipt, freshness) = observe_attestation(host, dmi, fingerprint.as_deref())?;
     let backend = backend_for(profile);
     let readings = backend.read_settings(host, profile, receipt.as_ref(), &freshness)?;
     let attestation = attestation_json(&freshness);
@@ -650,6 +651,12 @@ fn collect_report<H: Host>(
 
 fn attestation_json(freshness: &AttestationFreshness) -> AttestationJson {
     match freshness {
+        AttestationFreshness::NeedsRoot => AttestationJson {
+            status: "needs-root".into(),
+            summary: "BIOS evidence is in the root-only state directory".into(),
+            reason: None,
+            fix: Some("sudo nut bios".into()),
+        },
         AttestationFreshness::Missing => AttestationJson {
             status: "missing".into(),
             summary: "never attested".into(),
@@ -902,6 +909,37 @@ mod tests {
         assert_eq!(receipt.fingerprint.len(), 64);
         assert!(receipt.answers.iter().all(|answer| answer.confirmed));
         let _ = BIOS_STATE_DIR;
+    }
+
+    #[test]
+    fn private_bios_evidence_is_unknown_and_strict_readers_still_fail() {
+        for path in [pending_path(), receipt_path()] {
+            let host = athena_host().with_euid(1000).with_unreadable(path);
+            let mut out = Vec::new();
+            let mut err = Vec::new();
+            assert_eq!(
+                run_with_host(["nut", "bios", "--json"], &host, &mut out, &mut err),
+                0,
+                "{}",
+                String::from_utf8_lossy(&err)
+            );
+            let report: serde_json::Value = serde_json::from_slice(&out).unwrap();
+            assert_eq!(report["attestation"]["status"], "needs-root");
+            assert!(
+                report["settings"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|s| s["state"] == "unknown")
+            );
+            assert!(load_pending(&host).is_err() || crate::firmware::load_receipt(&host).is_err());
+            let root = host.with_euid(0);
+            out.clear();
+            assert_eq!(
+                run_with_host(["nut", "bios", "--json"], &root, &mut out, &mut err),
+                1
+            );
+        }
     }
 
     #[test]

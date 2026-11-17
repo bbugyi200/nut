@@ -1152,17 +1152,12 @@ fn build_resource<H: Host>(
             .ok_or(ConvergeError::Refused("USB device repair is unavailable"))?)
         }
         ResourceSpec::Retire => {
-            let hook = observation
-                .legacy_hook
-                .present_bytes()
-                .ok_or(ConvergeError::Refused("legacy hook bytes are unavailable"))?
-                .to_vec();
             let rendered = observation
                 .rendered
                 .as_ref()
                 .ok_or(ConvergeError::Refused("rendered files are unavailable"))?;
             Ok(Resource::retire_legacy(
-                hook,
+                rendered.hook.as_bytes().to_vec(),
                 rendered.upssched_conf.as_bytes().to_vec(),
             ))
         }
@@ -2233,6 +2228,50 @@ mod tests {
                 | HostEffect::Random { .. }
                 | HostEffect::CreateDir { .. }
         )));
+    }
+
+    #[test]
+    fn legacy_adoption_retires_hook_and_resumes_interrupted_retirement() {
+        let legacy =
+            include_bytes!("../../tests/fixtures/hosts/athena/deployed/athena-upssched-cmd");
+        for interrupted in [false, true] {
+            let host = with_observations(fixture_host(), 12, ol())
+                .with_file(LEGACY_HOOK, legacy.as_slice())
+                .with_metadata(LEGACY_HOOK, FileMetadata::file(0, 0, 0o755));
+            let hash = expect_plan(&host, false);
+            if interrupted {
+                host.fail_after("remove_protected", 0, "interrupted at retirement");
+                let error = converge(&host, &options(hash.clone(), false)).unwrap_err();
+                assert!(
+                    error.to_string().contains("interrupted at retirement"),
+                    "{error}"
+                );
+                assert!(
+                    host.read_protected(Path::new(LEGACY_HOOK))
+                        .unwrap()
+                        .is_some()
+                );
+            }
+            let host = if interrupted {
+                with_observations(host.snapshot_filesystem(), 12, ol())
+            } else {
+                host
+            };
+            let report = converge(&host, &options(hash.clone(), false)).unwrap();
+            assert_eq!(report.resumed, interrupted);
+            assert!(report.state_finalized);
+            assert!(report.doctor.verified(), "{:?}", report.doctor.failures);
+            assert!(
+                host.read_protected(Path::new(LEGACY_HOOK))
+                    .unwrap()
+                    .is_none()
+            );
+            let repeat = converge(&host, &options(hash, false)).unwrap();
+            assert!(repeat.files_applied.is_empty());
+            assert!(repeat.services_applied.is_empty());
+            assert!(repeat.backup_stamp.is_none());
+            assert!(!has_effect(&host.effects(), is_power_command));
+        }
     }
 
     #[test]

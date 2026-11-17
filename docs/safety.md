@@ -66,3 +66,12 @@ order. Planned memberships are observed after their group-creation prerequisite;
 started or completed memberships still require the group to exist. Never delete
 the journal to make an interrupted apply look like a new installation.
 
+Legacy-hook retirement compares the old body with the rendered replacement and
+requires the replacement hook and scheduler references to be installed before
+removal. Recovery uses the same validation and retains the original preimage.
+If a privilege runner omits PATH, subprocesses use only the conventional system
+binary directories; an explicit PATH is preserved. Non-root read-only views report
+private BIOS/drill evidence as needing root instead of treating it as absent or
+proven. Action readers still refuse inaccessible state; state directories stay
+private.
+

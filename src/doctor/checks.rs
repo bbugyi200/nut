@@ -12,8 +12,7 @@ use crate::config::ResolvedConfig;
 use crate::drill::DrillKind;
 use crate::firmware::audit::{BootCheck, CheckStatus, audit_boot};
 use crate::firmware::{
-    AttestationFreshness, DmiInfo, efivar_fingerprint, freshness, load_pending, load_receipt,
-    resolve_profile,
+    AttestationFreshness, DmiInfo, efivar_fingerprint, observe_attestation, resolve_profile,
 };
 use crate::host::Host;
 use crate::init::{
@@ -1305,14 +1304,16 @@ fn bios_attest<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> 
     let fingerprint = efivar_fingerprint(host, &profile.fingerprint_efivars)
         .ok()
         .flatten();
-    let pending = load_pending(host).ok().flatten();
-    let receipt = load_receipt(host).ok().flatten();
-    match freshness(
-        pending.as_ref(),
-        receipt.as_ref(),
-        &dmi,
-        fingerprint.as_deref(),
-    ) {
+    let (_, state) = match observe_attestation(host, &dmi, fingerprint.as_deref()) {
+        Ok(observed) => observed,
+        Err(error) => return unknown(entry, error.to_string()),
+    };
+    match state {
+        AttestationFreshness::NeedsRoot => skipped(
+            entry,
+            "BIOS evidence is in the root-only state directory",
+            Some("sudo nut doctor".into()),
+        ),
         AttestationFreshness::Fresh => pass(
             entry,
             format!(

@@ -69,6 +69,7 @@ pub struct PendingMarker {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AttestationFreshness {
+    NeedsRoot,
     Missing,
     Pending,
     Fresh,
@@ -78,6 +79,7 @@ pub enum AttestationFreshness {
 impl AttestationFreshness {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::NeedsRoot => "needs-root",
             Self::Missing => "missing",
             Self::Pending => "pending",
             Self::Fresh => "fresh",
@@ -257,6 +259,27 @@ pub fn load_pending<H: Host>(host: &H) -> Result<Option<PendingMarker>, HostErro
         HostError::message(format!("cannot parse pending BIOS marker: {error}"))
     })?;
     Ok(Some(pending))
+}
+
+/// Read-only views distinguish private evidence from missing evidence. Strict
+/// loaders stay unchanged for mutation/interlock callers and malformed records.
+pub fn observe_attestation<H: Host>(
+    host: &H,
+    dmi: &DmiInfo,
+    fingerprint: Option<&str>,
+) -> Result<(Option<AttestationReceipt>, AttestationFreshness), HostError> {
+    let records =
+        load_pending(host).and_then(|pending| load_receipt(host).map(|receipt| (pending, receipt)));
+    match records {
+        Ok((pending, receipt)) => {
+            let state = freshness(pending.as_ref(), receipt.as_ref(), dmi, fingerprint);
+            Ok((receipt, state))
+        }
+        Err(error) if host.euid() != 0 && error.is_permission_denied() => {
+            Ok((None, AttestationFreshness::NeedsRoot))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn save_json<H: Host, T: Serialize>(host: &H, path: &Path, value: &T) -> Result<(), HostError> {

@@ -2,7 +2,6 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -282,9 +281,12 @@ impl Host for SystemHost {
     }
 
     fn run_program(&self, program: &OsStr, args: &[OsString]) -> Result<ProcessOutput, HostError> {
-        let output = Command::new(program).args(args).output().map_err(|error| {
-            HostError::from_io(&format!("cannot run {}", program.to_string_lossy()), error)
-        })?;
+        let output = process::command(program)
+            .args(args)
+            .output()
+            .map_err(|error| {
+                HostError::from_io(&format!("cannot run {}", program.to_string_lossy()), error)
+            })?;
         Ok(ProcessOutput {
             status: output.status.code(),
             stdout: output.stdout,
@@ -352,7 +354,10 @@ impl Host for SystemHost {
             if !io::stdout().is_terminal() {
                 return None;
             }
-            let output = Command::new("stty").arg("size").output().ok()?;
+            let output = process::command(OsStr::new("stty"))
+                .arg("size")
+                .output()
+                .ok()?;
             let text = std::str::from_utf8(&output.stdout).ok()?;
             text.split_whitespace().last()?.parse().ok()
         }
