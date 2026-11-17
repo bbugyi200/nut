@@ -328,7 +328,7 @@ pub fn run<H: Host, W: Write>(
                 Entry {
                     path: adapter.clone(),
                     sha256: digest(bytes),
-                    protocol: super::protocol::PROTOCOL,
+                    protocol: 1,
                 },
             );
             // Retain ownership even when the subsequent shell probe fails, so an
@@ -352,7 +352,7 @@ pub fn run<H: Host, W: Write>(
             )
             .map_err(failure)?;
             match shell {
-                Shell::Zsh => writeln!(output, "Add to ~/.zshrc before compinit: fpath=({} $fpath)\nRestart zsh (exec zsh) to load it", shell_quote(adapter.parent().unwrap())).map_err(failure),
+                Shell::Zsh => writeln!(output, "Add to ~/.zshrc before compinit: fpath=({} $fpath)\nThen restart zsh or run: autoload -Uz compinit; compinit", shell_quote(adapter.parent().unwrap())).map_err(failure),
                 Shell::Bash => writeln!(output, "Enable bash-completion, or add to ~/.bashrc: source {}", shell_quote(&adapter)).map_err(failure),
             }
         }
@@ -365,7 +365,7 @@ pub fn run<H: Host, W: Write>(
                 let current = entry.is_some_and(|entry| {
                     owned(&entry.path, entry)
                         && entry.sha256 == digest(shell.adapter().as_bytes())
-                        && entry.protocol == super::protocol::PROTOCOL
+                        && entry.protocol == 1
                 });
                 let state = match entry {
                     None => "not-installed",

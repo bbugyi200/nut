@@ -40,12 +40,9 @@ pub struct Cli {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum ColorChoice {
-    /// Color when writing to a terminal (default).
     #[default]
     Auto,
-    /// Color even when piped.
     Always,
-    /// Never color.
     Never,
 }
 
@@ -309,14 +306,8 @@ pub enum BiosAction {
 
 #[derive(Debug, Subcommand)]
 pub enum ProfileAction {
-    /// List available board profiles.
     List,
-    /// Show one board profile in detail.
-    Show {
-        /// Board profile id to show.
-        id: String,
-    },
-    /// Scaffold a new board profile.
+    Show { id: String },
     New,
 }
 
@@ -397,7 +388,6 @@ pub struct CompletionArgs {
 pub enum CompletionAction {
     /// Install an adapter and verify registration in an isolated real shell.
     Install {
-        /// Shell to install the adapter for.
         #[arg(value_enum)]
         shell: Option<crate::completion::Shell>,
         /// Preview without creating files.
@@ -414,16 +404,12 @@ pub enum CompletionAction {
     Status,
     /// Remove adapters whose bytes still match the recorded manifest.
     Uninstall {
-        /// Shell to remove the adapter for.
         #[arg(value_enum)]
         shell: Option<crate::completion::Shell>,
-        /// Preview without removing files.
         #[arg(short = 'n', long)]
         dry_run: bool,
     },
-    /// Print the zsh adapter for manual installation.
     Zsh,
-    /// Print the bash adapter for manual installation.
     Bash,
 }
 

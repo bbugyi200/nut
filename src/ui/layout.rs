@@ -46,11 +46,6 @@ pub fn render_bar(value: f64, width: usize, ascii: bool) -> String {
     output
 }
 
-/// Display width of `text` in terminal columns (Unicode annex #11).
-pub fn display_width(text: &str) -> usize {
-    unicode_width::UnicodeWidthStr::width(text)
-}
-
 pub fn label_value(label: &str, value: &str, width: usize) -> String {
     const LABEL_COLUMN: usize = 16;
     let available = width.saturating_sub(LABEL_COLUMN).max(1);

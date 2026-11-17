@@ -8,35 +8,20 @@ Arguments:
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
   -l, --list
           List available backups
-
       --ascii
           Use ASCII symbols and bars
-
   -n, --dry-run
           Show the restore plan without changing anything
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -y, --yes
           Restore without an interactive prompt
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help

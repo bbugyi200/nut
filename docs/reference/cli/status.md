@@ -11,44 +11,27 @@ Usage: nut status [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --watch
           Continuously refresh the status view
-
       --all
           Include raw NUT variables
-
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
       --ups <UPS>
           UPS name (defaults to the selected host configuration, or `primary`)
-
       --upsd-address <ADDRESS>
           Loopback upsd address (defaults to host configuration, or 127.0.0.1)
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
       --upsd-port <PORT>
           Loopback upsd port (defaults to host configuration, or 3493)
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## Related

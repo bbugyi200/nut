@@ -15,38 +15,23 @@ Commands:
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --ascii
           Use ASCII symbols and bars
-
       --ups <UPS>
           UPS name (defaults to the selected host configuration, or `primary`)
-
   -j, --json
           Emit machine-readable JSON where supported
-
       --upsd-address <ADDRESS>
           Loopback upsd address (defaults to host configuration, or 127.0.0.1)
-
       --upsd-port <PORT>
           Loopback upsd port (defaults to host configuration, or 3493)
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## nut battery test
@@ -60,32 +45,19 @@ Usage: nut battery test [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --stop
           Stop a running test instead of starting one
-
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## Related

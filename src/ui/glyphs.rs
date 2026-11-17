@@ -9,7 +9,6 @@ pub struct Glyphs {
     pub arrow: &'static str,
     pub bar_full: &'static str,
     pub bar_empty: &'static str,
-    pub ellipsis: &'static str,
 }
 
 impl Glyphs {
@@ -36,7 +35,6 @@ impl Glyphs {
                 arrow: "->",
                 bar_full: "#",
                 bar_empty: ".",
-                ellipsis: "...",
             }
         } else {
             Self {
@@ -49,7 +47,6 @@ impl Glyphs {
                 arrow: "→",
                 bar_full: "█",
                 bar_empty: " ",
-                ellipsis: "…",
             }
         }
     }

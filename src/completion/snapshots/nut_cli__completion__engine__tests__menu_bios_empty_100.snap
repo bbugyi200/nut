@@ -1,9 +1,0 @@
----
-source: src/completion/engine.rs
-expression: "screen(&[\"nut\", \"bios\", \"\"], 100)"
----
-Commands
-  guide    Print a numbered keyboard walkthrough for this board
-  setup    Reboot into firmware setup after a hostname interlock
-  attest   Record a BIOS-version-pinned attestation receipt
-  profile  List, show, or scaffold a board profile

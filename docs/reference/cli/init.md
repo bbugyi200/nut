@@ -11,44 +11,27 @@ Usage: nut init [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
   -n, --dry-run
           Show the plan without applying changes
-
       --ascii
           Use ASCII symbols and bars
-
       --rotate-secrets
           Rotate both managed credentials instead of adopting existing ones
-
       --expect-plan <HASH>
           Apply only when the recomputed plan matches this hash
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -y, --yes
           Apply the reviewed plan without an interactive prompt
-
   -c, --config <PATH>
           Read host settings from this file
-
       --ups <UPS>
           UPS name (defaults to the selected host configuration)
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## Related

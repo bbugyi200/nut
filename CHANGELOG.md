@@ -2,12 +2,6 @@
 
 ## Unreleased
 
-- Rebuild shell completion around a shared `Menu`: one shared description
-  column, themed zsh listings (bold cyan headings, bold names, dim
-  descriptions), styled hints instead of dead Tabs, hidden refused/conflicting
-  flags, width-safe truncation, and a thin `compadd`-based zsh adapter plus an
-  order-preserving bash adapter over protocol 2 (v1 adapters keep working until
-  reinstalled).
 - Retry `EINTR` (`Interrupted`) while reading upsd response lines so a
   stop/continue or cgroup freeze no longer fails `status`, `doctor`, and `init`
   with "Interrupted system call".

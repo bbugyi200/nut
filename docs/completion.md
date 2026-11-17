@@ -10,106 +10,72 @@ nut completion status --json
 nut completion uninstall
 ```
 
-## What it looks like
+Each Tab asks the `nut` on PATH for the current command tree. Zsh groups and
+describes commands using the same Monitor, Act, Set up, Prove, and Shell headings
+as `nut --help`. Bash completes the same values. `status --ups` and `battery --ups`
+query the selected loopback upsd with `LIST UPS`; the entire query has a 150 ms
+budget, including slow partial responses. `--upsd-address` and `--upsd-port`
+preceding the cursor choose that connection. An offline server yields no names.
+Board-profile IDs include installed overrides; rollback stamps come from
+`/var/backups/nut-cli/`. An unreadable directory yields no stamps.
 
-`nut <Tab>` in zsh at 80 columns (see the generated
-[`completion.txt`](completion.txt)):
-
-```text
-Monitor
-  status      Show UPS status
-  battery     Show battery charge and runtime, or run a guarded self-test
-  events      Show UPS event history
-Act
-  beeper      Show or change the UPS beeper
-  notify      Send or inspect UPS notifications
-Set up
-  init        Plan or apply NUT configuration
-  rollback    List or restore a configuration backup
-  config      Inspect, scaffold, render, or diff host settings
-Prove
-  doctor      Check UPS protection and recovery readiness
-  bios        Guide and verify BIOS recovery settings
-  drill       Guide and record a physical outage drill
-Shell
-  completion  Install, inspect, or remove shell completion
-```
-
-Headings sit flush left. Candidates are indented two spaces. Every
-description in the menu starts in one shared column. Headings are bold cyan,
-names are bold, descriptions are dim. `NO_COLOR` turns color off.
-
-## How Tab decides what to offer
-
-At a command slot it lists commands. At a value slot it lists values. Options
-appear when you type `-`, or at a leaf where nothing else can follow.
-
-- A value slot first asks its provider (UPS names, doctor checks, rollback
-  stamps, board profiles, `--since`/`--boot` suggestions, shells), then clap
-  `PossibleValue`s, then path hints (`!files`/`!dirs`), and otherwise shows a
-  styled hint such as `PORT  Loopback upsd port …`.
-- A live lookup that comes back empty says what it tried: `status --ups` with
-  upsd offline shows `UPS  upsd at 127.0.0.1:3493 did not answer within 150 ms`.
-- Flags already present (unless repeatable), flags conflicting with what is
-  typed, hidden args, and the refused `drill --yes` / `bios setup --yes` never
-  appear.
-- No menu line wraps: descriptions truncate with `…` (`...` outside UTF-8
-  locales). In very narrow panes, descriptions drop and only names show.
-- In bash, `nut <Tab><Tab>` shows `status      Show UPS status` lines, one per
-  row, in menu order (`compopt -o nosort`). There are no headings or colors,
-  which readline cannot show.
-
-## Customizing with zstyle
-
-Aim styles at `':completion:*:*:nut:*'` or at one `nut-<group>` tag
-(`nut-monitor`, `nut-options`, `nut-global-options`, `nut-color-modes`,
-`nut-shells`, `nut-ups`, `nut-sections`, `nut-checks-<slug>`, `nut-backups`,
-`nut-board-profiles`, `nut-since`, `nut-boots`). For example:
+Installation selects `$SHELL` if the shell argument is omitted. Zsh uses the first
+existing user-owned fpath directory under HOME, otherwise `~/.zfunc`. Ensure that
+directory is in fpath **before** compinit in `~/.zshrc`, for example:
 
 ```zsh
-zstyle ':completion:*:*:nut:*' list-colors '=*=35'
+fpath=(~/.zfunc $fpath)
+autoload -Uz compinit
+compinit
 ```
 
-`NO_COLOR` (non-empty) turns nut's colors off. nut leaves no styles behind in
-the user's shell; its scoped temporary `zstyle`s vanish after each Tab.
+Bash uses `${BASH_COMPLETION_USER_DIR}/completions/nut` if set, otherwise
+`${XDG_DATA_HOME:-~/.local/share}/bash-completion/completions/nut`. Enable the
+bash-completion package in your shell, or source the printed adapter path from
+`~/.bashrc`. Installation does not edit startup files. Restart your shell after
+installing or removing adapters; an already loaded function remains in memory.
+
+Use `--target DIR` for a custom directory, `--dry-run` to preview, and `--force`
+to replace a foreign or modified file. Writes use same-directory temporary files,
+fsync, and atomic rename. A versioned manifest under
+`${XDG_STATE_HOME:-~/.local/state}/nut-cli/completion.json` records paths and SHA-256
+hashes. Reinstalling unchanged adapters preserves their mtimes. Uninstall checks
+every selected file before removing any, and refuses modified files. Uninstall
+before moving a tracked adapter to another directory.
+
+Install and status probe registration in **isolated real shells**: zsh compinit
+with the target on fpath, and bash `complete -p nut` after sourcing the adapter.
+`registered: true` confirms that the adapter loads; it does not claim that an
+already running interactive shell has loaded it. Status distinguishes missing,
+modified, outdated, current, and uninstalled adapters. It never repairs them.
+
+`nut completion zsh` and `nut completion bash` print the embedded adapters for
+manual installation. They do not require HOME or a manifest.
 
 ## Protocol and extension points
 
 The hidden endpoint is independent of normal command execution:
 
 ```text
-nut __complete <zsh|bash> --protocol 2 [--suffix TEXT] [--columns N] -- WORD...
+nut __complete <zsh|bash> --protocol 1 [--suffix TEXT] -- WORD...
 ```
 
 Words are unquoted shell arguments through the cursor, including the program name
 and an empty final word after a space. The final word contains only text before
 the cursor. Suffix text is accepted for cursor-in-word completion; shells retain
-it. A malformed `--columns` exits 2 like the other flags.
+it. Output is directives followed by tab-separated
+`value`, `description`, `group`, and `space|nospace` fields. Directives are
+`!prefix N` (preserve N Unicode characters), `!files`, `!dirs`, and `!message TEXT`.
+Unknown directives are ignored. Protocol skew gives a reinstall hint; malformed
+requests exit 2. Operational failures produce no candidates and exit 0. Candidates
+are never evaluated as shell code. No hidden request writes files, prompts, or
+sends a UPS control command.
 
-Response (v2) is UTF-8 lines on stdout, exit 0. There are three kinds of line:
-
-- Directives: `!prefix N`, `!files [GLOB]`, `!dirs`, and `!message TEXT`, plus
-  `!hint LABEL<TAB>TEXT` and `!group TAG<TAB>HEADING` (which starts the group
-  later candidates belong to).
-- Candidates: `VALUE<TAB>DISPLAY<TAB>space|nospace`. Rust always emits a
-  `!group` before the first candidate.
-
-Adapters ignore unknown directives and extra trailing fields. Values that are
-empty, contain controls, or start with `!` are dropped. Protocol skew gives a
-reinstall hint; malformed requests exit 2. Operational failures produce no
-candidates and exit 0. A v1 request gets a v1 response built from the same menu
-(`value<TAB>description<TAB>heading<TAB>space`), so the previously installed
-adapter keeps working until reinstalled. Candidates are never evaluated as
-shell code. No hidden request writes files, prompts, or sends a UPS control
-command.
-
-Rust decides what the menu contains and how it is laid out. The shell adapters
-only hand it to the shell. The `Provider` trait receives a command path,
-argument ID, and original words. Returning `Some` owns the slot with headed
-groups or a hint; `None` falls back to clap.
-
-Restart zsh (`exec zsh`) to load a new adapter; compinit does not reload an
-already loaded function.
+Only `completion::engine` imports the exactly pinned `clap_complete` dependency.
+The `Provider` trait receives a command path, argument ID, and original words.
+Returning `Some(values)` owns the slot; `None` falls back to clap. Later phases can
+extend `LiveProviders` for doctor check IDs or evidence records without changing
+the protocol or adapters. Drill names and other subcommands already come from clap.
 
 Protocol and shell adapters are adapted from the MIT-licensed
 `bobs-org/bob-cli` completion implementation, copyright 2026 Bryan M Bugyi.
@@ -124,3 +90,4 @@ then installs, probes, and removes both adapters under a sandboxed HOME.
 - [Getting started](getting-started.md)
 - [CLI reference](reference/cli/completion.md)
 - [Development](development.md)
+

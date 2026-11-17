@@ -4,49 +4,30 @@ Usage: nut events [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
   -s, --since <TIME>
           Include entries since a journalctl time (for example, 'today' or '-2h')
-
       --ascii
           Use ASCII symbols and bars
-
   -b, --boot <N>
           Select a boot offset (0 is current, -1 is previous)
-
   -f, --follow
           Stream new entries and updated stories until interrupted
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -o, --outages
           Show only power outages, blips, and shutdowns
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -r, --raw
           Show source journal messages instead of stories
-
   -n, --limit <COUNT>
           Maximum stories or raw entries to show (1-2000; default 20)
-
       --last-outage
           Show only the most recent outage (alias for --outages --limit 1)
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 
 System journal access may require sudo nut events. Optional systemd-journal membership exposes all system logs; nut never changes it automatically.

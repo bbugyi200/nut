@@ -23,29 +23,17 @@ Commands:
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## nut config path
@@ -59,29 +47,17 @@ Usage: nut config path [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## nut config show
@@ -95,29 +71,17 @@ Usage: nut config show [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## nut config new
@@ -131,32 +95,19 @@ Usage: nut config new [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
   -o, --output <PATH>
           Write the scaffold to this path instead of stdout
-
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## nut config render
@@ -170,32 +121,19 @@ Usage: nut config render [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
   -o, --output <DIR>
           Write each rendered file into this directory
-
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## nut config diff
@@ -209,29 +147,17 @@ Usage: nut config diff [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy
-
-          Possible values:
-          - auto:   Color when writing to a terminal (default)
-          - always: Color even when piped
-          - never:  Never color
-
-          [default: auto]
-
+          Color output policy [default: auto] [possible values: auto, always, never]
       --ascii
           Use ASCII symbols and bars
-
   -j, --json
           Emit machine-readable JSON where supported
-
   -v, --verbose
           Include additional diagnostic detail
-
   -c, --config <PATH>
           Read host settings from this file
-
   -h, --help
-          Print help (see a summary with '-h')
+          Print help
 ```
 
 ## Related
