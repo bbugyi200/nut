@@ -312,14 +312,35 @@ pub struct DoctorArgs {
 pub struct DrillArgs {
     #[command(subcommand)]
     pub action: Option<DrillAction>,
+
+    /// Refused. Drills need a person at the keyboard.
+    #[arg(long)]
+    pub yes: bool,
+
+    /// UPS name (defaults to the selected host configuration, or `cp1500`).
+    #[arg(long, value_name = "UPS")]
+    pub ups: Option<String>,
+
+    /// Loopback upsd address (defaults to 127.0.0.1).
+    #[arg(long, value_name = "ADDRESS")]
+    pub upsd_address: Option<String>,
+
+    /// Loopback upsd port (defaults to 3493).
+    #[arg(long, value_name = "PORT")]
+    pub upsd_port: Option<u16>,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Clone, Copy, Debug, Subcommand)]
 pub enum DrillAction {
+    /// Test a 60-second mains interruption without shutting down.
     Blip,
+    /// Test automatic power-on after a true AC loss.
     AcLoss,
+    /// Test UPS outlet cycling after a clean shutdown.
     Cycle,
+    /// Test shutdown and recovery during a sustained outage.
     Outage,
+    /// Record observations after a drill and review the prior boot journal.
     Report,
 }
 

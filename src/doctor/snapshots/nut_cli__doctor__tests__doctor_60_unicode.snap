@@ -95,7 +95,13 @@ expression: output
                           → nut bios guide, then: sudo nut
                             bios attest
  Proof
+   ○ proof.blip             never drilled
+                          → sudo nut drill blip
+   ○ proof.ac-loss          never drilled
+                          → sudo nut drill ac-loss
+   ○ proof.cycle            never drilled
+                          → sudo nut drill cycle
    ○ proof.outage           never drilled
                           → sudo nut drill outage
- 16 passed · 9 warnings · 4 failed · 4 unknown · 7 skipped
+ 16 passed · 9 warnings · 4 failed · 4 unknown · 10 skipped
  (root-only: sudo nut doctor)

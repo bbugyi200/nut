@@ -280,10 +280,31 @@ pub const CATALOG: &[CatalogEntry] = &[
         needs_root: false,
     },
     CatalogEntry {
+        id: "proof.blip",
+        section: Section::Proof,
+        title: "Mains blip drill",
+        docs: "Shows the latest 60-second mains blip result and marks it stale when BIOS settings, battery date, NUT version, or NUT/host configuration changes.",
+        needs_root: false,
+    },
+    CatalogEntry {
+        id: "proof.ac-loss",
+        section: Section::Proof,
+        title: "True AC-loss drill",
+        docs: "Shows the latest true AC-loss recovery result and its BIOS, battery, NUT, and configuration freshness.",
+        needs_root: false,
+    },
+    CatalogEntry {
+        id: "proof.cycle",
+        section: Section::Proof,
+        title: "UPS cycle drill",
+        docs: "Shows the latest UPS outlet-cycle recovery result and its BIOS, battery, NUT, and configuration freshness.",
+        needs_root: false,
+    },
+    CatalogEntry {
         id: "proof.outage",
         section: Section::Proof,
-        title: "Last outage drill",
-        docs: "Shows the last passing outage drill, or that one has never been recorded. Freshness against BIOS/NUT/config hashes lands with `nut drill`.",
+        title: "Sustained outage drill",
+        docs: "Shows the latest sustained outage recovery result and its BIOS, battery, NUT, and configuration freshness.",
         needs_root: false,
     },
 ];

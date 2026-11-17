@@ -1,0 +1,9 @@
+---
+source: src/drill.rs
+expression: text
+---
+nut drill · proof table
+  blip     never drilled
+  ac-loss  never drilled
+  cycle    never drilled
+  outage   never drilled

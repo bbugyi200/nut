@@ -1,8 +1,6 @@
 # Safety contract
 
-These rules apply to every implementation phase. The bootstrap only provides help
-and version output; operational interlocks described here must accompany the future
-commands that need them.
+These rules apply to every command and implementation phase.
 
 1. **Management plane only.** NUT daemons, `upssched`, and a tiny rendered shell hook
    own outage handling. No `CMDSCRIPT`, `NOTIFYCMD`, or `SHUTDOWNCMD` may invoke this
@@ -17,6 +15,12 @@ commands that need them.
    `test.battery.start.quick`, and `test.battery.stop`, never `ALL`. Offline tests
    use a fake Host for power actions. Agent init apply requires a reviewed sudo
    gate and `--expect-plan`.
+   Starting a physical drill requires root, interactive stdin and stdout, the
+   typed hostname, a live `OL` UPS at 95% charge or higher, and persistent
+   journaling. The command writes a pending evidence record before showing the
+   keyboard steps, refuses `--yes`, and never invokes shutdown, outlet, or NUT
+   power commands itself. See
+   [drill guidance](drills.md).
 4. **Protect secrets.** Passwords must never enter argv, logs, diffs, verbose output,
    or JSON. Diffs mask passwords; operator credentials belong in a file restricted
    to the appropriate group.

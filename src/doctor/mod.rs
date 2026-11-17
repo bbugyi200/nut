@@ -15,7 +15,8 @@ use crate::ui::theme::{Theme, Tone};
 use crate::ui::{UiContext, UiOptions};
 
 pub use engine::{catalog, find_entry};
-pub use types::{Check, Section, Status};
+pub use types::{CatalogEntry, Check, Section, Status};
+pub(crate) use types::{pass, skipped, unknown, warn};
 
 use engine::{Summary, run_checks, summarize, validate_filters};
 use snapshot::{GatherOptions, Snapshot};
@@ -542,7 +543,7 @@ mod tests {
                 entry.id
             );
         }
-        assert_eq!(catalog().len(), 40);
+        assert_eq!(catalog().len(), 43);
         let mut ids: Vec<_> = catalog().iter().map(|entry| entry.id).collect();
         ids.sort_unstable();
         ids.dedup();

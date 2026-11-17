@@ -5,6 +5,7 @@ pub mod cli;
 pub mod completion;
 pub mod config;
 pub mod doctor;
+pub mod drill;
 pub mod duration;
 pub mod error;
 pub mod events;
@@ -136,6 +137,7 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32,
         }
         Command::Status(args) => {
             let _ = bios::write_pending_reminder(host, cli.ascii, stdout)?;
+            drill::write_pending_reminder(host, cli.ascii, stdout)?;
             status::run_status(
                 args,
                 status::OutputOptions {
@@ -195,12 +197,25 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32,
             host,
             stdout,
         ),
+        Command::Drill(args) => drill::run(
+            args.action,
+            drill::DrillOptions {
+                config_path: cli.config.as_deref(),
+                json: cli.json,
+                ascii: cli.ascii,
+                yes: args.yes,
+                ups: args.ups.as_deref(),
+                upsd_address: args.upsd_address.as_deref(),
+                upsd_port: args.upsd_port,
+            },
+            host,
+            stdout,
+        ),
         Command::Beeper(_)
         | Command::Test(_)
         | Command::Notify(_)
         | Command::Init(_)
-        | Command::Rollback(_)
-        | Command::Drill(_) => Err(NutError::operational(
+        | Command::Rollback(_) => Err(NutError::operational(
             "this command is provided by a later nut phase",
         )),
     }

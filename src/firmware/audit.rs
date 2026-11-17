@@ -169,7 +169,7 @@ fn findmnt_verify<H: Host>(host: &H) -> BootCheck {
     }
 }
 
-fn journal_persistent<H: Host>(host: &H) -> BootCheck {
+pub fn journal_persistent<H: Host>(host: &H) -> BootCheck {
     let journal_dir = Path::new("/var/log/journal");
     if host.path_exists(journal_dir).unwrap_or(false) {
         return pass("boot.journal", "/var/log/journal is present");

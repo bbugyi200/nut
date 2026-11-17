@@ -250,8 +250,26 @@ Needs root: no
 
 ## Proof
 
+### `proof.blip`
+
+Shows the latest 60-second mains blip result and marks it stale when BIOS settings, battery date, NUT version, or NUT/host configuration changes.
+
+Needs root: no
+
+### `proof.ac-loss`
+
+Shows the latest true AC-loss recovery result and its BIOS, battery, NUT, and configuration freshness.
+
+Needs root: no
+
+### `proof.cycle`
+
+Shows the latest UPS outlet-cycle recovery result and its BIOS, battery, NUT, and configuration freshness.
+
+Needs root: no
+
 ### `proof.outage`
 
-Shows the last passing outage drill, or that one has never been recorded. Freshness against BIOS/NUT/config hashes lands with `nut drill`.
+Shows the latest sustained outage recovery result and its BIOS, battery, NUT, and configuration freshness.
 
 Needs root: no

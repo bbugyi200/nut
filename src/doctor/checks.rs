@@ -9,6 +9,7 @@ use super::snapshot::{Snapshot, file_meta, loopback_listeners, parse_version_tri
 use super::types::{CatalogEntry, Check, fail, pass, skipped, unknown, warn};
 use crate::completion::Shell;
 use crate::config::ResolvedConfig;
+use crate::drill::DrillKind;
 use crate::firmware::audit::{BootCheck, CheckStatus, audit_boot};
 use crate::firmware::{
     AttestationFreshness, DmiInfo, efivar_fingerprint, freshness, load_pending, load_receipt,
@@ -24,7 +25,6 @@ const INSTALLED_BINARY: &str = "/usr/local/bin/nut";
 const LEGACY_HOOK: &str = "/usr/local/sbin/athena-upssched-cmd";
 const SENDMAIL: &str = "/usr/sbin/sendmail";
 const KILLPOWER: &str = "/etc/killpower";
-const DRILLS_DIR: &str = "/var/lib/nut-cli/drills";
 const BATTERY_AGE_WARN_SECS: u64 = 3 * 365 * 24 * 60 * 60;
 const POWEROFF_HEADROOM: Duration = Duration::from_secs(10 * 60);
 const EXTRA_OFF_MARGIN: Duration = Duration::from_secs(60);
@@ -66,7 +66,10 @@ pub fn run<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> Chec
         | "boot.watchdog" => boot_from_audit(entry, host, snapshot),
         "bios.profile" => bios_profile(entry, host, snapshot),
         "bios.attest" => bios_attest(entry, host, snapshot),
-        "proof.outage" => proof_outage(entry, host),
+        "proof.blip" => proof_check(entry, DrillKind::Blip, host, snapshot),
+        "proof.ac-loss" => proof_check(entry, DrillKind::AcLoss, host, snapshot),
+        "proof.cycle" => proof_check(entry, DrillKind::Cycle, host, snapshot),
+        "proof.outage" => proof_check(entry, DrillKind::Outage, host, snapshot),
         other => unknown(entry, format!("no implementation for {other}")),
     }
 }
@@ -1108,18 +1111,20 @@ fn bios_attest<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> 
     }
 }
 
-fn proof_outage<H: Host>(entry: &CatalogEntry, host: &H) -> Check {
-    match host.list_dir(Path::new(DRILLS_DIR)) {
-        Ok(names) if names.iter().any(|name| name.contains("outage")) => pass(
-            entry,
-            "an outage drill record is present; freshness lands with nut drill",
-        ),
-        Ok(_) | Err(_) => skipped(
-            entry,
-            "never drilled",
-            Some("sudo nut drill outage".to_owned()),
-        ),
-    }
+fn proof_check<H: Host>(
+    entry: &CatalogEntry,
+    kind: DrillKind,
+    host: &H,
+    snapshot: &Snapshot,
+) -> Check {
+    crate::drill::proof_check(
+        entry,
+        kind,
+        host,
+        snapshot.nut_version.as_deref(),
+        snapshot.config_path.as_deref(),
+        snapshot.config.as_ref(),
+    )
 }
 
 fn read_text<H: Host>(host: &H, path: &Path) -> Result<Option<String>, String> {

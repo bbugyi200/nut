@@ -1,0 +1,12 @@
+---
+source: src/drill.rs
+expression: text
+---
+  !! Last config backup age unknown (no backup directory).
+nut drill ac-loss · athena
+  Charge  100% · Status  OL CHRG
+  1. At the keyboard, run `sudo systemctl poweroff`.
+  2. After athena is fully off, switch the PSU off for 30 seconds, then back on.
+  3. Do not press the case power button. Run `sudo nut drill report` after boot.
+  Evidence saved before the drill in /var/lib/nut-cli/drills/pending.json.
+  After the drill, run `sudo nut drill report` to record the result.

@@ -1,0 +1,7 @@
+---
+source: src/drill.rs
+expression: text
+---
+ok outage drill passed
+  Read 1 journal entries from boot -1.
+  Human observations are recorded as attestations.
