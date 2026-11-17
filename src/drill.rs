@@ -13,13 +13,14 @@ use crate::doctor::{CatalogEntry, Check, pass, skipped, unknown, warn};
 use crate::error::NutError;
 use crate::firmware::audit::{CheckStatus, journal_persistent};
 use crate::firmware::{DmiInfo, efivar_fingerprint, read_trimmed, resolve_profile};
-use crate::host::Host;
+use crate::host::{FileMetadata, Host};
 use crate::journal;
 use crate::profiles::{embedded_catalog, load_catalog};
 use crate::render::{LIVE_PATHS, mask_secrets};
 use crate::ui::layout::format_duration;
 use crate::upsd::UpsdClient;
 
+const STATE_DIR: &str = "/var/lib/nut-cli";
 const DRILLS_DIR: &str = "/var/lib/nut-cli/drills";
 const PENDING_PATH: &str = "/var/lib/nut-cli/drills/pending.json";
 const BACKUPS_DIR: &str = "/var/backups/nut-cli";
@@ -27,6 +28,22 @@ const DEFAULT_UPS: &str = "cp1500";
 const BLIP_MINIMUM: Duration = Duration::from_secs(60);
 const BLIP_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
+/// Drill records live in the same root-only state tree that `nut init`
+/// protects, so they use its private directory and file metadata.
+const PRIVATE_DIR: FileMetadata = FileMetadata {
+    uid: 0,
+    gid: 0,
+    mode: 0o700,
+    is_file: false,
+    is_dir: true,
+};
+const PRIVATE_FILE: FileMetadata = FileMetadata {
+    uid: 0,
+    gid: 0,
+    mode: 0o600,
+    is_file: true,
+    is_dir: false,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -589,7 +606,7 @@ fn report<H: Host, W: Write>(host: &H, ascii: bool, stdout: &mut W) -> Result<()
     record.passed = Some(passed);
     record.attestations = Some(attestations);
     save_record(host, &record_path(record.drill), &record)?;
-    host.write_file(Path::new(PENDING_PATH), b"")?;
+    write_private(host, Path::new(PENDING_PATH), b"")?;
 
     let glyph = if ascii {
         if passed { "ok" } else { "!!" }
@@ -863,19 +880,30 @@ fn load_record<H: Host>(host: &H, path: &Path) -> Result<Option<DrillRecord>, Nu
     let Some(bytes) = host.read_file(path)? else {
         return Ok(None);
     };
+    parse_record(&bytes)
+}
+
+fn parse_record(bytes: &[u8]) -> Result<Option<DrillRecord>, NutError> {
     if bytes.iter().all(u8::is_ascii_whitespace) {
         return Ok(None);
     }
-    let record = serde_json::from_slice(&bytes)
+    let record = serde_json::from_slice(bytes)
         .map_err(|error| NutError::operational(format!("cannot parse drill record: {error}")))?;
     Ok(Some(record))
 }
 
 fn save_record<H: Host>(host: &H, path: &Path, record: &DrillRecord) -> Result<(), NutError> {
-    host.create_dir_all(Path::new(DRILLS_DIR))?;
     let bytes = serde_json::to_vec_pretty(record)
         .map_err(|error| NutError::operational(format!("cannot encode drill record: {error}")))?;
-    host.write_file(path, &bytes)?;
+    write_private(host, path, &bytes)
+}
+
+/// Publish a drill record atomically, without following links, as a
+/// `root:root` 0600 file under the private 0700 state tree `nut init` manages.
+fn write_private<H: Host>(host: &H, path: &Path, bytes: &[u8]) -> Result<(), NutError> {
+    host.create_secure_dir(Path::new(STATE_DIR), &PRIVATE_DIR)?;
+    host.create_secure_dir(Path::new(DRILLS_DIR), &PRIVATE_DIR)?;
+    host.replace_file_atomic(path, bytes, &PRIVATE_FILE)?;
     Ok(())
 }
 
@@ -888,15 +916,30 @@ pub fn proof_check<H: Host>(
     config: Option<&HostConfig>,
 ) -> Check {
     let path = record_path(kind);
-    let record = match load_record(host, &path) {
-        Ok(Some(record)) => record,
-        Ok(None) => {
+    let never_drilled = || {
+        skipped(
+            entry,
+            "never drilled",
+            Some(format!("sudo nut drill {}", kind.slug())),
+        )
+    };
+    let bytes = match host.read_file(&path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return never_drilled(),
+        // `nut init` keeps /var/lib/nut-cli root-only, so a non-root doctor
+        // cannot see proofs; skip like the other root-only state checks.
+        Err(error) if error.is_permission_denied() => {
             return skipped(
                 entry,
-                "never drilled",
-                Some(format!("sudo nut drill {}", kind.slug())),
+                "drill proofs are in the root-only state directory",
+                Some("sudo nut doctor".to_owned()),
             );
         }
+        Err(error) => return unknown(entry, error.to_string()),
+    };
+    let record = match parse_record(&bytes) {
+        Ok(Some(record)) => record,
+        Ok(None) => return never_drilled(),
         Err(error) => return unknown(entry, error.to_string()),
     };
     if record.reported_unix.is_none() {
@@ -1336,6 +1379,47 @@ mod tests {
             let check = proof_check(entry, kind, &host, Some("2.8.1"), None, None);
             assert_eq!(check.status, Status::Warn, "{kind:?}: {check:?}");
             assert!(check.evidence.contains("BIOS version changed"));
+        }
+    }
+
+    #[test]
+    fn records_are_private_atomic_files_under_the_init_state_tree() {
+        let host = FakeHost::default().with_euid(0);
+        let record = pending_record(DrillKind::Blip, EvidencePins::default());
+        save_record(&host, Path::new(PENDING_PATH), &record).unwrap();
+        write_private(&host, Path::new(PENDING_PATH), b"").unwrap();
+
+        for dir in [STATE_DIR, DRILLS_DIR] {
+            let metadata = host.metadata(Path::new(dir)).unwrap().unwrap();
+            assert!(metadata.is_dir, "{dir}");
+            assert_eq!((metadata.uid, metadata.gid, metadata.mode), (0, 0, 0o700));
+        }
+        let metadata = host.metadata(Path::new(PENDING_PATH)).unwrap().unwrap();
+        assert!(metadata.is_file);
+        assert_eq!((metadata.uid, metadata.gid, metadata.mode), (0, 0, 0o600));
+        let effects = host.effects();
+        assert!(
+            effects
+                .iter()
+                .all(|effect| !matches!(effect, crate::host::HostEffect::WriteFile { .. })),
+            "{effects:?}"
+        );
+        assert!(
+            load_record(&host, Path::new(PENDING_PATH))
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn unreadable_root_only_proofs_are_skipped_not_unknown() {
+        for kind in DrillKind::ALL {
+            let host = FakeHost::default().with_unreadable(record_path(kind));
+            let entry = find_entry(&format!("proof.{}", kind.slug())).unwrap();
+            let check = proof_check(entry, kind, &host, Some("2.8.1"), None, None);
+            assert_eq!(check.status, Status::Skipped, "{kind:?}: {check:?}");
+            assert!(check.evidence.contains("root-only"), "{check:?}");
+            assert_eq!(check.fix.as_deref(), Some("sudo nut doctor"));
         }
     }
 }

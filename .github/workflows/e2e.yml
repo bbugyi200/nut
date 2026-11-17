@@ -29,8 +29,14 @@ jobs:
       - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: just
+      # Build as the runner so the toolchain and cache stay runner-owned; the
+      # root harness only installs this locked binary.
+      - name: Build locked release binary
+        run: cargo build --locked --release --bin nut
+      # sudo's secure_path drops runner tools such as just, so pass absolute
+      # paths instead of relying on PATH under sudo.
       - name: Prove dummy-ups init, events, and rollback
-        run: sudo --preserve-env=CARGO_TERM_COLOR,CARGO_HOME,RUSTUP_HOME,PATH just e2e
+        run: sudo env NUT_E2E_BIN="$PWD/target/release/nut" "$(command -v just)" e2e
       - name: Upload redacted failure diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

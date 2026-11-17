@@ -32,8 +32,10 @@ canceled. Tests never require UPS hardware, NUT services, privileges, or network
 access. Dependency acquisition and CI setup may require network access.
 
 A separate `e2e.yml` job on `ubuntu-24.04` installs NUT 2.8.1, fails if that
-version is unavailable, builds with `--locked`, installs the binary
-root-owned at `/usr/local/bin/nut`, and runs `just e2e` against a local
+version is unavailable, builds with `--locked` as the unprivileged runner,
+passes that binary to the root harness through `NUT_E2E_BIN` (sudo's
+`secure_path` hides runner tools, so the job calls `just` by absolute path),
+installs it root-owned at `/usr/local/bin/nut`, and runs `just e2e` against a local
 dummy-ups `.dev` source. The harness proves hash-bound init, root `init --yes`,
 idempotent reruns, dummy OB/OL events, and rollback. Runner-only shutdown and
 sendmail stubs are installed before NUT starts. `just e2e-lint` validates those

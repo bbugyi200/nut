@@ -289,12 +289,17 @@ EOF
 }
 
 install_cli() {
-    cargo build --locked --bin nut --release
     local bin
-    if [[ -n ${CARGO_TARGET_DIR:-} && -x ${CARGO_TARGET_DIR}/release/nut ]]; then
-        bin=${CARGO_TARGET_DIR}/release/nut
+    if [[ -n ${NUT_E2E_BIN:-} ]]; then
+        # CI builds with --locked as the unprivileged runner and passes the binary.
+        bin=$NUT_E2E_BIN
     else
-        bin=$ROOT/target/release/nut
+        cargo build --locked --bin nut --release
+        if [[ -n ${CARGO_TARGET_DIR:-} && -x ${CARGO_TARGET_DIR}/release/nut ]]; then
+            bin=${CARGO_TARGET_DIR}/release/nut
+        else
+            bin=$ROOT/target/release/nut
+        fi
     fi
     [[ -x $bin ]] || fail "release binary missing at $bin"
     install -o root -g root -m 0755 "$bin" "$NUT_BIN"

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Run the dummy-ups e2e job for real: build the locked release binary as the
+  unprivileged runner and pass it to the root harness through `NUT_E2E_BIN`,
+  calling `just` by absolute path because sudo's `secure_path` hid it.
+- Keep drill records inside the protected init state tree: `nut drill` now
+  publishes records atomically as `root:root` 0600 files under the 0700
+  `/var/lib/nut-cli/drills`, and non-root `nut doctor` skips the root-only
+  proof checks with a `sudo nut doctor` hint instead of reporting them as
+  unknown once `nut init` has secured `/var/lib/nut-cli`.
 - Prove init, dummy-ups events, and rollback on real NUT 2.8.1: isolated
   Ubuntu 24.04 `e2e.yml` installs the root-owned `/usr/local/bin/nut`, runs
   hash-bound `init --yes --expect-plan` plus the documented root `init --yes`

@@ -20,7 +20,10 @@ Before showing the physical steps, `nut` writes
 variable fingerprint, NUT version, hash of the host and live NUT configuration,
 and configured battery installation date. It also stores the initial UPS status,
 charge, runtime, host, and boot ID. Secrets and raw configuration contents are not
-stored in the record.
+stored in the record. Drill records share the protected state tree that `nut init`
+manages: `/var/lib/nut-cli` and its `drills` directory are `root:root` 0700, and
+each record is published atomically, without following links, as a `root:root`
+0600 file.
 
 ## Drill steps
 
@@ -48,7 +51,9 @@ A pending report appears as a reminder in the regular `nut` status view and in
 `nut drill`. Doctor lists `proof.blip`, `proof.ac-loss`, `proof.cycle`, and
 `proof.outage`. A proof is stale after its BIOS version, EFI fingerprint, battery
 installation date, NUT version, host config, or live NUT config changes. The
-doctor fix command names the drill to repeat.
+doctor fix command names the drill to repeat. Because the records are root-only, a
+non-root `nut doctor` skips the proof checks and points to `sudo nut doctor`
+instead of reporting them as unknown.
 
 Drill records are evidence of what was observed and what the operator attested;
 they do not prove that every future outage will recover successfully. Never run a
