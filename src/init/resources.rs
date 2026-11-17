@@ -500,6 +500,9 @@ pub fn apply_resource(
         if let Action::Fstab { bytes, .. } = &resource.resource.0 {
             cleanup_fstab(host, transaction, bytes)?;
         }
+        if matches!(&resource.resource.0, Action::OperatorsGroup) {
+            transaction::record_created_group(host, transaction, "nut-operators")?;
+        }
         transaction::checkpoint(host, transaction, &record.id, Checkpoint::Completed)?;
         return Ok(());
     }
@@ -516,6 +519,9 @@ pub fn apply_resource(
         return Err(ResourceError::Refused(
             "resource command did not reach its desired state",
         ));
+    }
+    if matches!(&resource.resource.0, Action::OperatorsGroup) {
+        transaction::record_created_group(host, transaction, "nut-operators")?;
     }
     transaction::checkpoint(host, transaction, &record.id, Checkpoint::Completed)?;
     Ok(())

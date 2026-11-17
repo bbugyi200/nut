@@ -220,7 +220,21 @@ pub const CATALOG: &[CatalogEntry] = &[
         id: "root.perms",
         section: Section::Root,
         title: "NUT file owners and modes",
-        docs: "`/etc/nut/*` is `root:nut` 0640; the hook is `root:root` 0755.",
+        docs: "NUT configs are `root:nut` 0640, the hook is `root:root` 0755, and CLI config/secret ownership is least-privilege.",
+        needs_root: true,
+    },
+    CatalogEntry {
+        id: "state.drift",
+        section: Section::Root,
+        title: "Applied state matches managed files",
+        docs: "Validate the applied state record, installed host config, recorded managed outputs, and pending recovery state.",
+        needs_root: true,
+    },
+    CatalogEntry {
+        id: "state.backup",
+        section: Section::Root,
+        title: "Applied-state backup is available",
+        docs: "The state record points to a complete, private, validated rollback manifest and file set.",
         needs_root: true,
     },
     CatalogEntry {

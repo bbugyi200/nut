@@ -61,6 +61,10 @@ expression: output
                           -> sudo nut doctor
    -- root.perms             root-only
                           -> sudo nut doctor
+   -- state.drift            root-only
+                          -> sudo nut doctor
+   -- state.backup           root-only
+                          -> sudo nut doctor
  Boot & BIOS
    ok boot.efi-order         Boot0002* debian is first
    ok boot.nofail            2 listed mount(s) carry nofail
@@ -84,5 +88,5 @@ expression: output
                           -> sudo nut drill cycle
    -- proof.outage           never drilled
                           -> sudo nut drill outage
- 16 passed | 9 warnings | 4 failed | 4 unknown | 10 skipped (root-only: sudo nut
+ 16 passed | 9 warnings | 4 failed | 4 unknown | 12 skipped (root-only: sudo nut
  doctor)

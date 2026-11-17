@@ -33,6 +33,10 @@ fn request(resource: &PreparedResource) -> BeginRequest {
             }],
             _ => vec![],
         },
+        created_groups: match &resource.resource.0 {
+            Action::OperatorsGroup => vec!["nut-operators".into()],
+            _ => vec![],
+        },
         operations: vec![resource.intent()],
     }
 }
@@ -154,6 +158,7 @@ fn deferred_secret_binding_is_once_only_and_requires_backup() {
         operations: vec![reserve_resource(id)],
         services: vec![],
         membership_additions: vec![],
+        created_groups: vec![],
     };
     let tx = begin(&host, &request).unwrap().unwrap();
     let secret =

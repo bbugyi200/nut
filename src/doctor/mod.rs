@@ -321,6 +321,17 @@ pub const REQUIRED_PROTECTION_CHECKS: &[&str] = &["hw.data", "hw.online"];
 /// Never prompts, elevates, writes files, or sleeps unless the caller opts in
 /// through a future observe duration.
 pub fn report<H: Host>(host: &H, options: &ReportOptions<'_>) -> DoctorReport {
+    report_excluding(host, options, &[])
+}
+
+/// Gather a structured doctor report while omitting checks whose evidence is
+/// intentionally unavailable at a lifecycle boundary, such as applied-state
+/// checks before init finalizes its state record.
+pub(crate) fn report_excluding<H: Host>(
+    host: &H,
+    options: &ReportOptions<'_>,
+    excluded: &[&str],
+) -> DoctorReport {
     let snapshot = Snapshot::gather(
         host,
         GatherOptions {
@@ -331,7 +342,10 @@ pub fn report<H: Host>(host: &H, options: &ReportOptions<'_>) -> DoctorReport {
             port: options.port,
         },
     );
-    let checks = run_checks(host, &snapshot, &[]);
+    let checks: Vec<_> = run_checks(host, &snapshot, &[])
+        .into_iter()
+        .filter(|check| !excluded.contains(&check.id.as_str()))
+        .collect();
     let summary = summarize(&checks);
     let mut failures = Vec::new();
     for check in &checks {
@@ -369,8 +383,52 @@ fn write_error(error: impl std::fmt::Display) -> NutError {
 mod tests {
     use super::*;
     use crate::host::{FakeHost, FileMetadata, ProcessOutput};
+    use crate::init::{FileMetadataRecord, OutputRecord, StateRecord, TransactionOutcome};
     use crate::run_with_host;
+    use sha2::{Digest, Sha256};
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
     use std::time::{Duration, UNIX_EPOCH};
+
+    const STATE_STAMP: &str = "20261117T010203Z-0102030405060708";
+
+    fn state_fixture(target: &[u8]) -> FakeHost {
+        let config = b"host = \"fixture\"\n";
+        let state = StateRecord {
+            schema_version: 1,
+            config_hash: format!("{:x}", Sha256::digest(config)),
+            profile_hash: "c".repeat(64),
+            outputs: BTreeMap::from([(
+                PathBuf::from("/etc/nut/ups.conf"),
+                OutputRecord {
+                    sha256: format!("{:x}", Sha256::digest(target)),
+                    metadata: FileMetadataRecord {
+                        uid: 0,
+                        gid: 42,
+                        mode: 0o640,
+                    },
+                },
+            )]),
+            absent_outputs: Default::default(),
+            managed_identities: BTreeMap::from([("ups".into(), "cp1500".into())]),
+            created_groups: Vec::new(),
+            backup_reference: STATE_STAMP.into(),
+            transaction_outcome: TransactionOutcome::Applied,
+        };
+        FakeHost::default()
+            .with_euid(0)
+            .with_file("/etc/nut-cli/nut.toml", config)
+            .with_file("/etc/nut/ups.conf", target)
+            .with_metadata("/etc/nut/ups.conf", FileMetadata::file(0, 42, 0o640))
+            .with_file(
+                "/var/lib/nut-cli/state.json",
+                serde_json::to_vec(&state).unwrap(),
+            )
+            .with_metadata(
+                "/var/lib/nut-cli/state.json",
+                FileMetadata::file(0, 0, 0o600),
+            )
+    }
 
     fn athena_toml() -> &'static [u8] {
         include_bytes!("../../tests/fixtures/hosts/athena/nut.toml")
@@ -547,6 +605,83 @@ mod tests {
     }
 
     #[test]
+    fn state_checks_distinguish_no_history_drift_and_corruption() {
+        let no_state = FakeHost::default().with_euid(0);
+        let (code, text, err) = execute(&["nut", "doctor", "state.drift"], &no_state);
+        assert_eq!(code, 0, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("no previous init state record"));
+
+        let matching = state_fixture(b"recorded config");
+        let (code, text, err) = execute(&["nut", "doctor", "state.drift"], &matching);
+        assert_eq!(code, 0, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("matches its recorded config and outputs"),
+            "{text}"
+        );
+
+        let drifted = state_fixture(b"recorded config")
+            .with_file("/etc/nut/ups.conf", b"changed config")
+            .with_metadata("/etc/nut/ups.conf", FileMetadata::file(0, 42, 0o640));
+        let (code, text, err) = execute(&["nut", "doctor", "state.drift"], &drifted);
+        assert_eq!(code, 1, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("applied-state drift"));
+        assert!(flat.contains("/etc/nut/ups.conf"));
+
+        let corrupt = FakeHost::default()
+            .with_euid(0)
+            .with_file("/var/lib/nut-cli/state.json", b"not-json")
+            .with_metadata(
+                "/var/lib/nut-cli/state.json",
+                FileMetadata::file(0, 0, 0o600),
+            );
+        let (code, text, err) = execute(&["nut", "doctor", "state.drift"], &corrupt);
+        assert_eq!(code, 1, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("state record is corrupt or unsafe"));
+    }
+
+    #[test]
+    fn state_backup_check_rejects_a_missing_referenced_backup() {
+        let host = state_fixture(b"recorded config");
+        let (code, text, err) = execute(&["nut", "doctor", "state.backup"], &host);
+        assert_eq!(code, 1, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains(
+                "backup 20261117T010203Z-0102030405060708 is missing, corrupt, or unsafe"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn operator_doctor_check_requires_the_exact_least_privilege_allowlist() {
+        let exact = b"[upsmon]\npassword = redacted-one\nupsmon primary\n[nut-operator]\npassword = redacted-two\ninstcmds = beeper.disable\ninstcmds = beeper.enable\ninstcmds = beeper.mute\ninstcmds = test.battery.start.quick\ninstcmds = test.battery.stop\n";
+        let host = FakeHost::default()
+            .with_euid(0)
+            .with_file("/etc/nut/upsd.users", exact);
+        let (code, text, err) = execute(&["nut", "doctor", "root.instcmds"], &host);
+        assert_eq!(code, 0, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("exactly the five approved commands"));
+        assert!(!text.contains("redacted-one"));
+        assert!(!text.contains("redacted-two"));
+
+        let overprivileged = FakeHost::default().with_euid(0).with_file(
+            "/etc/nut/upsd.users",
+            [exact.as_slice(), b"actions = SET\n"].concat(),
+        );
+        let (code, text, err) = execute(&["nut", "doctor", "root.instcmds"], &overprivileged);
+        assert_eq!(code, 1, "{err}");
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("differ from the approved allowlist"));
+        assert!(!text.contains("redacted-two"));
+    }
+
+    #[test]
     fn doctor_screens_at_supported_widths_and_ascii() {
         for width in [60, 80, 120] {
             for ascii in [false, true] {
@@ -633,7 +768,7 @@ mod tests {
                 entry.id
             );
         }
-        assert_eq!(catalog().len(), 43);
+        assert_eq!(catalog().len(), 45);
         let mut ids: Vec<_> = catalog().iter().map(|entry| entry.id).collect();
         ids.sort_unstable();
         ids.dedup();

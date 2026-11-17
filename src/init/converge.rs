@@ -38,7 +38,7 @@ use super::transaction::{
     acquire_writer_lock, begin_locked, checkpoint, finalize, materialize_secret, operation_record,
     original_file, recover, recover_with_observations,
 };
-use crate::doctor::{DoctorReport, ReportOptions, report};
+use crate::doctor::{DoctorReport, ReportOptions, report, report_excluding};
 use crate::host::{FileMetadata, Host, HostError, ProcessOutput, ProcessRequest};
 use crate::render::{OPERATOR_PLACEHOLDER, UPSMON_PLACEHOLDER};
 
@@ -1412,6 +1412,15 @@ fn apply_fresh<H: Host>(
         targets: targets.into_iter().collect(),
         services: snapshots.clone(),
         membership_additions: work.membership_additions.clone(),
+        created_groups: if work
+            .resources
+            .iter()
+            .any(|spec| matches!(spec, ResourceSpec::Group))
+        {
+            vec!["nut-operators".to_owned()]
+        } else {
+            Vec::new()
+        },
         operations,
     };
     let Some(transaction) = begin_locked(host, lock, &request)? else {
@@ -1449,8 +1458,12 @@ fn apply_fresh<H: Host>(
             .prepare(host, &spec.id())?;
         let resource = build_resource(host, observation, &secrets, &nut_toml, spec)?;
         let executed = drive_resource(host, &transaction, spec, resource, prepared)?;
-        if executed && let ResourceSpec::File { path } = spec {
-            outcome.files_applied.push(path.clone());
+        if executed {
+            match spec {
+                ResourceSpec::File { path } => outcome.files_applied.push(path.clone()),
+                ResourceSpec::Retire => outcome.files_applied.push(PathBuf::from(LEGACY_HOOK)),
+                _ => {}
+            }
         }
     }
     for op in &work.services {
@@ -1517,10 +1530,14 @@ fn apply_resumed<H: Host>(
                 let prepared = build_resource(host, observation, &secrets, &nut_toml, &spec)?
                     .prepare(host, id)?;
                 let resource = build_resource(host, observation, &secrets, &nut_toml, &spec)?;
-                if drive_resource(host, &transaction, &spec, resource, prepared)?
-                    && let ResourceSpec::File { path } = &spec
-                {
-                    outcome.files_applied.push(path.clone());
+                if drive_resource(host, &transaction, &spec, resource, prepared)? {
+                    match &spec {
+                        ResourceSpec::File { path } => outcome.files_applied.push(path.clone()),
+                        ResourceSpec::Retire => {
+                            outcome.files_applied.push(PathBuf::from(LEGACY_HOOK));
+                        }
+                        _ => {}
+                    }
                 }
             }
             ResourceSpecOrService::Service(op) => {
@@ -1559,7 +1576,11 @@ fn finish<H: Host>(
     resumed: bool,
 ) -> Result<ConvergeReport, ConvergeError> {
     let ups_name = ups_name_of(observation)?.to_owned();
-    let doctor = report(
+    // The state record and its finalized backup reference do not exist until
+    // this verification succeeds, so those two post-init checks are not
+    // applicable at this boundary. All checks run normally for later doctor
+    // invocations and for no-op init plans.
+    let doctor = report_excluding(
         host,
         &ReportOptions {
             config_path: observation.config_path.as_deref(),
@@ -1570,6 +1591,7 @@ fn finish<H: Host>(
             address: UPSD_ADDRESS,
             port: UPSD_PORT,
         },
+        &["state.drift", "state.backup"],
     );
     if !doctor.verified() {
         let problems = compensate(
@@ -1592,11 +1614,13 @@ fn finish<H: Host>(
             detail,
         });
     }
+    let created_groups = super::transaction::created_groups_for_transaction(host, transaction)?;
     let state = state_record(
         host,
         observation,
         transaction,
         &outcome.files_applied,
+        &created_groups,
         resumed,
     )?;
     finalize(host, transaction, &state)?;
@@ -1759,6 +1783,7 @@ fn state_record<H: Host>(
     observation: &super::observe::Observation,
     transaction: &Transaction,
     files: &[PathBuf],
+    created_groups: &[String],
     resumed: bool,
 ) -> Result<StateRecord, ConvergeError> {
     let ups_name = ups_name_of(observation)?.to_owned();
@@ -1768,6 +1793,7 @@ fn state_record<H: Host>(
             "installed host config is missing after apply",
         ))?;
     let mut outputs = BTreeMap::new();
+    let mut absent_outputs = BTreeSet::new();
     let mut seen = BTreeSet::new();
     for path in files {
         if !seen.insert(path) || path == Path::new(STATE_PATH) {
@@ -1784,6 +1810,8 @@ fn state_record<H: Host>(
                     metadata: (&metadata).into(),
                 },
             );
+        } else {
+            absent_outputs.insert(path.clone());
         }
     }
     Ok(StateRecord {
@@ -1791,7 +1819,9 @@ fn state_record<H: Host>(
         config_hash: sha256bytes(&installed),
         profile_hash: digest(&profile_identity(observation)?),
         outputs,
+        absent_outputs,
         managed_identities: BTreeMap::from([("ups".to_owned(), ups_name)]),
+        created_groups: created_groups.to_vec(),
         backup_reference: transaction.stamp.clone(),
         transaction_outcome: if resumed {
             TransactionOutcome::Recovered
@@ -1839,6 +1869,9 @@ fn drive_resource<H: Host>(
             "a completed operation drifted outside this transaction",
         )),
         (CheckpointState::Started, true) => {
+            if matches!(spec, ResourceSpec::Group) {
+                super::transaction::record_created_group(host, transaction, "nut-operators")?;
+            }
             checkpoint(host, transaction, &id, Checkpoint::Completed)?;
             Ok(false)
         }

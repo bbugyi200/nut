@@ -54,11 +54,17 @@ record is removed. If interrupted after writing state but before recording
 publication, recovery compares the state bytes with the intent and resumes
 without rewriting them. Empty plans return before taking the lock,
 creating directories, generating entropy, or writing backups or state. The
-transaction module has no command-line dispatch yet; `init::converge`
-already composes it with resource application, service effects, and
-verification, and later init/rollback phases add the CLI and restoration.
-See [init resource application](init-resources.md) for the executor contract
-and [init convergence](init-converge.md) for the coordinator contract.
+`init::converge` composes the transaction store with resource application,
+service effects, and verification. `init::rollback` exposes validated list,
+preview, and restore APIs. Restore shares the writer lock, validates the
+manifest and blobs before effects, and writes a private per-backup progress
+journal after each effect so retries are idempotent. `state.drift` and
+`state.backup` are root-only structured doctor checks over the protected state
+record, its output fingerprints, and its backup reference. See
+[init resource application](init-resources.md),
+[init convergence](init-converge.md), and [init rollback](init-rollback.md)
+for the executor, coordinator, and recovery contracts. The CLI wiring follows
+in the next init phase.
 
 `just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
 then runs the real CLI against it. `just fake-upsd` serves the fixture for manual

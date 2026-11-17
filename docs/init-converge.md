@@ -35,4 +35,9 @@ failure, or unavailable required protection evidence, fails verification. On
 failure, converge restores touched files and service enable/active states from
 the recorded preimages, keeps the backup and the recovery record, and reports
 the exact `nut rollback <stamp>` command. The state record is finalized only
-after verification passes.
+after verification passes. Its output hashes and metadata, explicit
+absent-output set, and actual group-creation record feed the `state.drift` and
+`state.backup` doctor checks and rollback.
+
+See [init rollback](init-rollback.md) for the validated restore API, service
+safety gates, and the limits of package rollback.

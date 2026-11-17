@@ -30,7 +30,11 @@ These rules apply to every command and implementation phase.
   journals contain references and fingerprints, while generated credentials are
   persisted privately once before either credential endpoint is changed. Recovery
   compares started operations to recorded before/after states; unknown results remain
-  unresolved until freshly observed.
+  unresolved until freshly observed. Rollback validates the complete backup, uses the
+  same writer lock, and records resumable progress. It restores only recorded targets
+  and account additions, retains installed packages and package-owned users, and
+  requires fresh safe-online UPS evidence before changing service activity. See
+  [init rollback](init-rollback.md).
 5. **Keep recipes offline.** Build and test recipes must never touch a real UPS,
    power anything off, or implicitly contact another host. Any future recipe that
    reaches a host must require that host as an explicit argument.

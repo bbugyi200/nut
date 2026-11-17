@@ -16,6 +16,10 @@ use crate::firmware::{
     resolve_profile,
 };
 use crate::host::Host;
+use crate::init::{
+    FileMetadataRecord, PENDING_PATH, TransactionError, backup_summary, parse_upsd_users,
+    read_state_record,
+};
 use crate::render::{
     DiffStatus, HOOK_PATH, LIVE_PATHS, OPERATOR_PLACEHOLDER, UPSMON_PLACEHOLDER, diff_live, render,
 };
@@ -62,6 +66,8 @@ pub fn run<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> Chec
         "root.placeholders" => root_placeholders(entry, host),
         "root.instcmds" => root_instcmds(entry, host),
         "root.perms" => root_perms(entry, host, snapshot),
+        "state.drift" => state_drift(entry, host),
+        "state.backup" => state_backup(entry, host),
         "boot.efi-order" | "boot.nofail" | "boot.fstab" | "boot.journal" | "boot.panic"
         | "boot.watchdog" => boot_from_audit(entry, host, snapshot),
         "bios.profile" => bios_profile(entry, host, snapshot),
@@ -968,18 +974,58 @@ fn root_placeholders<H: Host>(entry: &CatalogEntry, host: &H) -> Check {
 fn root_instcmds<H: Host>(entry: &CatalogEntry, host: &H) -> Check {
     match read_text(host, Path::new("/etc/nut/upsd.users")) {
         Ok(Some(text)) => {
-            let granted = text.lines().any(|line| {
+            let all_granted = text.lines().any(|line| {
                 let line = line.trim().to_ascii_lowercase();
                 line.starts_with("instcmds") && line.contains("all")
             });
-            if granted {
+            if all_granted {
                 fail(
                     entry,
                     "instcmds = ALL is granted",
                     "replace ALL with the operator allowlist, then: sudo nut init",
                 )
             } else {
-                pass(entry, "no instcmds = ALL grant")
+                let parsed = parse_upsd_users(&text);
+                let expected = [
+                    "beeper.disable",
+                    "beeper.enable",
+                    "beeper.mute",
+                    "test.battery.start.quick",
+                    "test.battery.stop",
+                ];
+                let section = parsed.sections.get("nut-operator");
+                let Some(section) = section else {
+                    return fail(
+                        entry,
+                        "nut-operator account is missing",
+                        "restore the exact operator allowlist with: sudo nut init",
+                    );
+                };
+                let allowed_keys = ["password", "instcmds"];
+                let has_extra_key = section
+                    .keys()
+                    .any(|key| !allowed_keys.contains(&key.as_str()));
+                let password_count = section.get("password").map_or(0, Vec::len);
+                let mut grants = parsed.operator_instcmds.clone();
+                grants.sort();
+                let mut expected = expected.map(str::to_owned).to_vec();
+                expected.sort();
+                let exact = !parsed.operator_malformed
+                    && parsed.operator.is_some()
+                    && password_count == 1
+                    && !parsed.operator_has_actions_set
+                    && !parsed.operator_has_all
+                    && !has_extra_key
+                    && grants == expected;
+                if exact {
+                    pass(entry, "nut-operator has exactly the five approved commands")
+                } else {
+                    fail(
+                        entry,
+                        "nut-operator grants or account directives differ from the approved allowlist",
+                        "restore the exact operator allowlist with: sudo nut init",
+                    )
+                }
             }
         }
         Ok(None) => fail(entry, "upsd.users is missing", "sudo nut init"),
@@ -989,6 +1035,7 @@ fn root_instcmds<H: Host>(entry: &CatalogEntry, host: &H) -> Check {
 
 fn root_perms<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> Check {
     let nut_gid = snapshot.group_gid(host, "nut");
+    let operators_gid = snapshot.group_gid(host, "nut-operators");
     let mut problems = Vec::new();
     for (name, path, mode, group) in [
         ("nut.conf", "/etc/nut/nut.conf", 0o640, "nut"),
@@ -997,14 +1044,24 @@ fn root_perms<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> C
         ("upsd.users", "/etc/nut/upsd.users", 0o640, "nut"),
         ("upsmon.conf", "/etc/nut/upsmon.conf", 0o640, "nut"),
         ("hook", HOOK_PATH, 0o755, "root"),
+        ("host config", "/etc/nut-cli/nut.toml", 0o644, "root"),
+        (
+            "operator secret",
+            "/etc/nut-cli/operator.secret",
+            0o640,
+            "nut-operators",
+        ),
     ] {
         match file_meta(host, Path::new(path)) {
             Ok(None) => problems.push(format!("{name} missing")),
             Ok(Some(meta)) => {
-                let want_gid = if group == "nut" { nut_gid } else { Some(0) };
+                let want_gid = match group {
+                    "nut" => nut_gid,
+                    "nut-operators" => operators_gid,
+                    _ => Some(0),
+                };
                 let gid_ok = match (group, want_gid, meta.gid) {
-                    ("root", _, 0) => true,
-                    ("nut", Some(want), gid) => gid == want,
+                    (_, Some(want), gid) => gid == want,
                     _ => false,
                 };
                 if !(meta.is_file && meta.uid == 0 && gid_ok && meta.mode == mode) {
@@ -1021,6 +1078,156 @@ fn root_perms<H: Host>(entry: &CatalogEntry, host: &H, snapshot: &Snapshot) -> C
         pass(entry, "NUT files are root-owned with the expected modes")
     } else {
         fail(entry, problems.join("; "), "sudo nut init")
+    }
+}
+
+fn state_drift<H: Host>(entry: &CatalogEntry, host: &H) -> Check {
+    if host.euid() != 0 {
+        return skipped(entry, "state checks require root", None);
+    }
+    match host.path_exists(Path::new(PENDING_PATH)) {
+        Ok(true) => {
+            return fail(
+                entry,
+                "pending init transaction requires recovery before state can be trusted",
+                "resume the reviewed plan with: sudo nut init --yes --expect-plan HASH",
+            );
+        }
+        Err(_) => return unknown(entry, "pending transaction state is unreadable"),
+        Ok(false) => {}
+    }
+    let state = match read_state_record(host) {
+        Ok(Some(state)) => state,
+        Ok(None) => return skipped(entry, "no previous init state record", None),
+        Err(TransactionError::Host(error)) if error.is_permission_denied() => {
+            return unknown(entry, "root state record is unreadable");
+        }
+        Err(TransactionError::Host(_)) => return unknown(entry, "root state record is unreadable"),
+        Err(_) => {
+            return fail(
+                entry,
+                "root state record is corrupt or unsafe",
+                "inspect the protected state and backup before running `sudo nut init`",
+            );
+        }
+    };
+
+    let config_path = Path::new("/etc/nut-cli/nut.toml");
+    let config = match host.read_protected(config_path) {
+        Ok(Some(bytes)) => Some(bytes),
+        Ok(None) => {
+            return fail(
+                entry,
+                "installed host config is missing",
+                "restore the selected backup with `sudo nut rollback`",
+            );
+        }
+        Err(_) => return unknown(entry, "installed host config is unreadable"),
+    };
+    let mut drift = Vec::new();
+    if config
+        .as_deref()
+        .is_some_and(|bytes| format!("{:x}", Sha256::digest(bytes)) != state.config_hash)
+    {
+        drift.push(config_path.display().to_string());
+    }
+    for (path, expected) in &state.outputs {
+        match (host.read_protected(path), host.metadata(path)) {
+            (Ok(Some(bytes)), Ok(Some(metadata)))
+                if format!("{:x}", Sha256::digest(&bytes)) == expected.sha256
+                    && FileMetadataRecord::from(&metadata) == expected.metadata
+                    && metadata.is_file
+                    && !metadata.is_dir => {}
+            (Err(_), _) | (_, Err(_)) => {
+                return unknown(
+                    entry,
+                    format!("recorded output {} is unreadable", path.display()),
+                );
+            }
+            _ => drift.push(path.display().to_string()),
+        }
+    }
+    for path in &state.absent_outputs {
+        match (host.read_protected(path), host.metadata(path)) {
+            (Ok(None), Ok(None)) => {}
+            (Err(_), _) | (_, Err(_)) => {
+                return unknown(
+                    entry,
+                    format!("recorded absent output {} is unreadable", path.display()),
+                );
+            }
+            _ => drift.push(path.display().to_string()),
+        }
+    }
+    drift.sort();
+    drift.dedup();
+    if drift.is_empty() {
+        pass(
+            entry,
+            format!(
+                "state {} matches its recorded config and outputs",
+                state.backup_reference
+            ),
+        )
+    } else {
+        fail(
+            entry,
+            format!("applied-state drift: {}", drift.join(", ")),
+            "review current files, then restore with `sudo nut rollback` or reapply a reviewed init plan",
+        )
+    }
+}
+
+fn state_backup<H: Host>(entry: &CatalogEntry, host: &H) -> Check {
+    if host.euid() != 0 {
+        return skipped(entry, "backup checks require root", None);
+    }
+    match host.path_exists(Path::new(PENDING_PATH)) {
+        Ok(true) => {
+            return fail(
+                entry,
+                "pending init transaction has not finalized its backup reference",
+                "resume the reviewed plan with: sudo nut init --yes --expect-plan HASH",
+            );
+        }
+        Err(_) => return unknown(entry, "pending transaction state is unreadable"),
+        Ok(false) => {}
+    }
+    let state = match read_state_record(host) {
+        Ok(Some(state)) => state,
+        Ok(None) => return skipped(entry, "no previous init state record", None),
+        Err(TransactionError::Host(error)) if error.is_permission_denied() => {
+            return unknown(entry, "root state record is unreadable");
+        }
+        Err(TransactionError::Host(_)) => return unknown(entry, "root state record is unreadable"),
+        Err(_) => {
+            return fail(
+                entry,
+                "root state record is corrupt or unsafe",
+                "inspect the protected state and backup before rollback",
+            );
+        }
+    };
+    match backup_summary(host, &state.backup_reference) {
+        Ok(summary) => pass(
+            entry,
+            format!(
+                "backup {} contains {} validated file preimages",
+                summary.stamp,
+                summary.files.len()
+            ),
+        ),
+        Err(TransactionError::Host(error)) if error.is_permission_denied() => {
+            unknown(entry, "applied-state backup is unreadable")
+        }
+        Err(_) => fail(
+            entry,
+            format!(
+                "backup {} is missing, corrupt, or unsafe",
+                state.backup_reference
+            ),
+            "do not delete backup data; inspect it before rollback",
+        ),
     }
 }
 

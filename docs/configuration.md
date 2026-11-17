@@ -62,6 +62,15 @@ credential fields: NUT secrets stay in protected runtime files. UPS names, mail
 addresses, and `extra` ups.conf values are validated before interpolation so a stray
 quote or newline cannot inject an `AT … EXECUTE` line or shell.
 
+Init installs the validated source config as root-owned `/etc/nut-cli/nut.toml`
+with mode `0644`. The generated operator password is stored separately as one
+password followed by a newline in `/etc/nut-cli/operator.secret`, owned by
+`root:nut-operators` with mode `0640`. Do not put this password in host TOML,
+command arguments, environment variables, or logs. `nut doctor` checks these
+permissions and the operator's exact command allowlist. Rollback restores the
+previous file bytes and metadata while retaining installed distribution
+packages; see [init rollback](init-rollback.md).
+
 Embedded UPS profiles live in `profiles/ups/`. Host-local overrides may be dropped in
 `/etc/nut-cli/ups/*.toml` and `/etc/nut-cli/boards/*.toml` without rebuilding nut.
 The CyberPower CP1500PFCLCD profile pins delays 60/0, USB ids `0764:0501` and

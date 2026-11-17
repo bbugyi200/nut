@@ -25,6 +25,7 @@ pub const BACKUP_ROOT: &str = "/var/backups/nut-cli";
 pub const APPLY_LOCK_PATH: &str = "/var/lib/nut-cli.init.lock";
 const STATE_DIR: &str = "/var/lib/nut-cli";
 const MANIFEST_NAME: &str = "manifest.json";
+pub(super) const ROLLBACK_JOURNAL_NAME: &str = "rollback.json";
 const MAX_MANIFEST_BYTES: usize = 1024 * 1024;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TOTAL_BACKUP_BYTES: usize = 64 * 1024 * 1024;
@@ -72,6 +73,9 @@ pub struct BeginRequest {
     pub services: Vec<ServiceSnapshot>,
     /// Only additions made by this transaction are recorded.
     pub membership_additions: Vec<MembershipAddition>,
+    /// Operator groups created by this transaction. Rollback may remove only
+    /// groups recorded here, and only when they are still unused.
+    pub created_groups: Vec<String>,
     /// The complete ordered operation list is durable before effects begin.
     pub operations: Vec<OperationIntent>,
 }
@@ -83,6 +87,7 @@ impl BeginRequest {
         self.targets.is_empty()
             && self.services.is_empty()
             && self.membership_additions.is_empty()
+            && self.created_groups.is_empty()
             && self.operations.is_empty()
     }
 }
@@ -181,6 +186,44 @@ pub struct BackupSummary {
     pub files: Vec<BackupFileSummary>,
     pub services: Vec<ServiceSnapshot>,
     pub membership_additions: Vec<MembershipAddition>,
+    pub created_groups: Vec<String>,
+}
+
+/// A fully validated backup with private preimages held only in memory.
+/// It intentionally has no `Debug` implementation.
+pub(super) struct ValidatedBackup {
+    pub(super) summary: BackupSummary,
+    pub(super) files: Vec<RestoreFile>,
+}
+
+pub(super) struct RestoreFile {
+    pub(super) path: PathBuf,
+    pub(super) contents: Option<Vec<u8>>,
+    pub(super) metadata: Option<FileMetadataRecord>,
+}
+
+pub(super) fn backup_stamps<H: Host>(host: &H) -> Result<Vec<String>, TransactionError> {
+    let root = Path::new(BACKUP_ROOT);
+    let Some(metadata) = host.metadata(root)? else {
+        return Ok(Vec::new());
+    };
+    if !metadata.is_dir || metadata.is_file {
+        return Err(TransactionError::Invalid("backup root is not a directory"));
+    }
+    verify_private_dir(host, root)?;
+    let mut stamps = host.list_dir(root)?;
+    for stamp in &stamps {
+        validate_stamp(stamp)?;
+        let path = root.join(stamp);
+        let metadata = host
+            .metadata(&path)?
+            .ok_or(TransactionError::Invalid("backup entry disappeared"))?;
+        if !metadata.is_dir || metadata.is_file {
+            return Err(TransactionError::Invalid("backup entry is not a directory"));
+        }
+    }
+    stamps.sort_by(|left, right| right.cmp(left));
+    Ok(stamps)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -237,7 +280,14 @@ pub struct StateRecord {
     pub config_hash: String,
     pub profile_hash: String,
     pub outputs: BTreeMap<PathBuf, OutputRecord>,
+    /// Managed outputs intentionally absent after this transaction.
+    #[serde(default)]
+    pub absent_outputs: BTreeSet<PathBuf>,
     pub managed_identities: BTreeMap<String, String>,
+    /// Operator groups actually created by this transaction, not merely
+    /// requested by its plan.
+    #[serde(default)]
+    pub created_groups: Vec<String>,
     pub backup_reference: String,
     pub transaction_outcome: TransactionOutcome,
 }
@@ -283,6 +333,8 @@ struct Manifest {
     files: Vec<ManifestFile>,
     services: Vec<ServiceSnapshot>,
     membership_additions: Vec<MembershipAddition>,
+    #[serde(default)]
+    created_groups: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -318,6 +370,8 @@ struct PendingRecord {
     operations: Vec<OperationRecord>,
     state_finalization: StateFinalization,
     secrets: BTreeMap<SecretPurpose, SecretReference>,
+    #[serde(default)]
+    created_groups: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -507,6 +561,7 @@ pub fn begin_locked<H: Host>(
         files,
         services: sorted_services(&request.services),
         membership_additions: sorted_memberships(&request.membership_additions),
+        created_groups: sorted_groups(&request.created_groups),
     };
     let manifest_bytes = encode(&manifest)?;
     let manifest_path = backup_dir.join(MANIFEST_NAME);
@@ -531,6 +586,7 @@ pub fn begin_locked<H: Host>(
         operations,
         state_finalization: StateFinalization::Awaiting,
         secrets: BTreeMap::new(),
+        created_groups: Vec::new(),
     };
     host.replace_file_atomic(
         Path::new(PENDING_PATH),
@@ -572,6 +628,54 @@ pub fn checkpoint<H: Host>(
         _ => return Err(TransactionError::InvalidCheckpoint),
     }
     save_pending(host, &pending)
+}
+
+/// Record an operator group only after the group-add effect has been
+/// observed. This distinguishes a newly created group from a planned no-op.
+pub(crate) fn record_created_group<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    group: &str,
+) -> Result<(), TransactionError> {
+    require_root(host)?;
+    require_transaction_lock(transaction)?;
+    if group != "nut-operators" {
+        return Err(TransactionError::Invalid("unknown created group"));
+    }
+    let mut pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    let (manifest, _) = read_and_validate_manifest(host, &pending)?;
+    if !manifest
+        .created_groups
+        .iter()
+        .any(|created| created == group)
+    {
+        return Err(TransactionError::Invalid(
+            "created group is not included in the reviewed transaction",
+        ));
+    }
+    if !pending
+        .created_groups
+        .iter()
+        .any(|created| created == group)
+    {
+        pending.created_groups.push(group.to_owned());
+        pending.created_groups.sort();
+        save_pending(host, &pending)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn created_groups_for_transaction<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+) -> Result<Vec<String>, TransactionError> {
+    require_root(host)?;
+    require_transaction_lock(transaction)?;
+    let pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    read_and_validate_manifest(host, &pending)?;
+    Ok(pending.created_groups)
 }
 
 /// Inspect a journaled operation while retaining the writer lock. Resource
@@ -936,6 +1040,11 @@ pub fn finalize<H: Host>(
     let mut pending = load_pending(host)?;
     ensure_transaction(&pending, transaction)?;
     validate_state(state, &transaction.stamp)?;
+    if state.created_groups != pending.created_groups {
+        return Err(TransactionError::Invalid(
+            "state record does not match the durable created-group journal",
+        ));
+    }
     if pending
         .operations
         .iter()
@@ -1053,7 +1162,9 @@ fn validate_begin_request(request: &BeginRequest) -> Result<(), TransactionError
             "transaction exceeds the record size limit",
         ));
     }
-    if request.services.len() > MAX_SERVICES || request.membership_additions.len() > MAX_MEMBERSHIPS
+    if request.services.len() > MAX_SERVICES
+        || request.membership_additions.len() > MAX_MEMBERSHIPS
+        || request.created_groups.len() > 16
     {
         return Err(TransactionError::Invalid(
             "transaction metadata exceeds the size limit",
@@ -1119,6 +1230,14 @@ fn validate_begin_request(request: &BeginRequest) -> Result<(), TransactionError
         if !memberships.insert((&addition.user, &addition.group)) {
             return Err(TransactionError::Invalid(
                 "transaction contains duplicate memberships",
+            ));
+        }
+    }
+    let mut groups = BTreeSet::new();
+    for group in &request.created_groups {
+        if group != "nut-operators" || !groups.insert(group) {
+            return Err(TransactionError::Invalid(
+                "transaction has an unknown or duplicate created group",
             ));
         }
     }
@@ -1233,6 +1352,14 @@ fn validate_pending(pending: &PendingRecord) -> Result<(), TransactionError> {
             ));
         }
         validate_hash(&reference.sha256)?;
+    }
+    let mut created_groups = BTreeSet::new();
+    for group in &pending.created_groups {
+        if group != "nut-operators" || !created_groups.insert(group) {
+            return Err(TransactionError::Invalid(
+                "pending journal has an unknown or duplicate created group",
+            ));
+        }
     }
     Ok(())
 }
@@ -1358,6 +1485,11 @@ fn read_and_validate_manifest<H: Host>(
             expected_names.insert(orphan.to_owned());
         }
     }
+    let rollback_path = directory.join(ROLLBACK_JOURNAL_NAME);
+    if host.read_protected(&rollback_path)?.is_some() {
+        verify_private_file(host, &rollback_path)?;
+        expected_names.insert(ROLLBACK_JOURNAL_NAME.to_owned());
+    }
     let actual_names: BTreeSet<_> = host.list_dir(&directory)?.into_iter().collect();
     if actual_names != expected_names {
         return Err(TransactionError::Invalid(
@@ -1369,8 +1501,127 @@ fn read_and_validate_manifest<H: Host>(
         files,
         services: manifest.services.clone(),
         membership_additions: manifest.membership_additions.clone(),
+        created_groups: manifest.created_groups.clone(),
     };
     Ok((manifest, summary))
+}
+
+/// Validate and summarize every complete backup, newest first. Corrupt or
+/// unexpected entries fail the whole listing so callers cannot silently
+/// select an older backup.
+pub fn backup_summaries<H: Host>(host: &H) -> Result<Vec<BackupSummary>, TransactionError> {
+    let root = Path::new(BACKUP_ROOT);
+    let Some(metadata) = host.metadata(root)? else {
+        return Ok(Vec::new());
+    };
+    if !metadata.is_dir || metadata.is_file {
+        return Err(TransactionError::Invalid("backup root is not a directory"));
+    }
+    verify_private_dir(host, root)?;
+    let mut stamps = host.list_dir(root)?;
+    stamps.sort_by(|left, right| right.cmp(left));
+    let mut summaries = Vec::with_capacity(stamps.len());
+    for stamp in stamps {
+        let backup = load_backup(host, &stamp)?;
+        summaries.push(backup.summary);
+    }
+    Ok(summaries)
+}
+
+/// Inspect one complete backup without exposing any file contents.
+pub fn backup_summary<H: Host>(host: &H, stamp: &str) -> Result<BackupSummary, TransactionError> {
+    Ok(load_backup(host, stamp)?.summary)
+}
+
+/// Read and validate the protected current state record. A missing state is
+/// distinct from a corrupt or unreadable one.
+pub fn read_state_record<H: Host>(host: &H) -> Result<Option<StateRecord>, TransactionError> {
+    let path = Path::new(STATE_PATH);
+    let bytes = host.read_protected(path)?;
+    let metadata = host.metadata(path)?;
+    match (bytes, metadata) {
+        (None, None) => Ok(None),
+        (Some(bytes), Some(metadata)) => {
+            verify_private_file(host, path)?;
+            if !metadata.is_file || metadata.is_dir || bytes.len() > MAX_MANIFEST_BYTES {
+                return Err(TransactionError::Invalid("state record is invalid"));
+            }
+            let state: StateRecord = decode(&bytes)?;
+            validate_state(&state, &state.backup_reference)?;
+            Ok(Some(state))
+        }
+        _ => Err(TransactionError::Invalid(
+            "state record contents and metadata disagree",
+        )),
+    }
+}
+
+pub(super) fn load_backup<H: Host>(
+    host: &H,
+    stamp: &str,
+) -> Result<ValidatedBackup, TransactionError> {
+    validate_stamp(stamp)?;
+    verify_private_dir(host, Path::new(BACKUP_ROOT))?;
+    let directory = backup_dir(stamp);
+    verify_private_dir(host, &directory)?;
+    let manifest_path = directory.join(MANIFEST_NAME);
+    let bytes = host
+        .read_protected(&manifest_path)?
+        .ok_or(TransactionError::Invalid("backup manifest is missing"))?;
+    verify_private_file(host, &manifest_path)?;
+    if bytes.len() > MAX_MANIFEST_BYTES {
+        return Err(TransactionError::Invalid("backup manifest is too large"));
+    }
+    let manifest: Manifest = decode(&bytes)?;
+    if manifest.stamp != stamp {
+        return Err(TransactionError::Invalid(
+            "backup manifest stamp does not match its directory",
+        ));
+    }
+    let pending = PendingRecord {
+        schema_version: 1,
+        stamp: stamp.to_owned(),
+        plan_hash: manifest.plan_hash.clone(),
+        manifest_sha256: sha256(&bytes),
+        operations: Vec::new(),
+        state_finalization: StateFinalization::Awaiting,
+        secrets: BTreeMap::new(),
+        created_groups: Vec::new(),
+    };
+    let (validated, summary) = read_and_validate_manifest(host, &pending)?;
+    let mut files = Vec::with_capacity(validated.files.len());
+    for (index, entry) in validated.files.iter().enumerate() {
+        match entry {
+            ManifestFile::Absent { path } => files.push(RestoreFile {
+                path: path.clone(),
+                contents: None,
+                metadata: None,
+            }),
+            ManifestFile::Present {
+                path,
+                blob,
+                sha256: expected_hash,
+                byte_len,
+                metadata,
+            } => {
+                if blob != &format!("file-{index:04}.bin") {
+                    return Err(TransactionError::Invalid("backup blob sequence is invalid"));
+                }
+                let contents = host
+                    .read_protected(&directory.join(blob))?
+                    .ok_or(TransactionError::Invalid("backup file blob is missing"))?;
+                if contents.len() != *byte_len || sha256(&contents) != *expected_hash {
+                    return Err(TransactionError::Invalid("backup file blob is corrupt"));
+                }
+                files.push(RestoreFile {
+                    path: path.clone(),
+                    contents: Some(contents),
+                    metadata: Some(metadata.clone()),
+                });
+            }
+        }
+    }
+    Ok(ValidatedBackup { summary, files })
 }
 
 fn validate_manifest(manifest: &Manifest, pending: &PendingRecord) -> Result<(), TransactionError> {
@@ -1392,6 +1643,15 @@ fn validate_manifest(manifest: &Manifest, pending: &PendingRecord) -> Result<(),
     {
         return Err(TransactionError::Invalid(
             "backup manifest exceeds the size limit",
+        ));
+    }
+    if pending
+        .created_groups
+        .iter()
+        .any(|group| !manifest.created_groups.contains(group))
+    {
+        return Err(TransactionError::Invalid(
+            "pending journal records a group outside the backup manifest",
         ));
     }
     let mut paths = BTreeSet::new();
@@ -1418,6 +1678,7 @@ fn validate_manifest(manifest: &Manifest, pending: &PendingRecord) -> Result<(),
             .collect(),
         services: manifest.services.clone(),
         membership_additions: manifest.membership_additions.clone(),
+        created_groups: manifest.created_groups.clone(),
         operations: pending
             .operations
             .iter()
@@ -1443,7 +1704,9 @@ fn validate_state(state: &StateRecord, stamp: &str) -> Result<(), TransactionErr
     if state.backup_reference != stamp {
         return Err(TransactionError::WrongTransaction);
     }
-    if state.outputs.len() > MAX_TARGETS || state.managed_identities.len() > 128 {
+    if state.outputs.len() + state.absent_outputs.len() > MAX_TARGETS
+        || state.managed_identities.len() > 128
+    {
         return Err(TransactionError::Invalid(
             "state record exceeds the size limit",
         ));
@@ -1460,9 +1723,25 @@ fn validate_state(state: &StateRecord, stamp: &str) -> Result<(), TransactionErr
             return Err(TransactionError::Invalid("state metadata is invalid"));
         }
     }
+    for path in &state.absent_outputs {
+        validate_target(path)?;
+        if path == Path::new(STATE_PATH) || state.outputs.contains_key(path) {
+            return Err(TransactionError::Invalid(
+                "state record has conflicting output entries",
+            ));
+        }
+    }
     for (key, value) in &state.managed_identities {
         validate_token(key, 64)?;
         validate_token(value, 128)?;
+    }
+    let mut created_groups = BTreeSet::new();
+    for group in &state.created_groups {
+        if group != "nut-operators" || !created_groups.insert(group) {
+            return Err(TransactionError::Invalid(
+                "state record contains an unknown or duplicate created group",
+            ));
+        }
     }
     Ok(())
 }
@@ -1835,6 +2114,12 @@ fn sorted_memberships(values: &[MembershipAddition]) -> Vec<MembershipAddition> 
     values
 }
 
+fn sorted_groups(values: &[String]) -> Vec<String> {
+    let mut values = values.to_vec();
+    values.sort();
+    values
+}
+
 fn simple_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 64
@@ -1937,6 +2222,7 @@ mod tests {
                 user: "alice".into(),
                 group: "nut-operators".into(),
             }],
+            created_groups: Vec::new(),
             operations: vec![
                 OperationIntent {
                     id: "file:/etc/nut/nut.conf".into(),
@@ -1963,7 +2249,9 @@ mod tests {
             config_hash: "b".repeat(64),
             profile_hash: "c".repeat(64),
             outputs: BTreeMap::new(),
+            absent_outputs: BTreeSet::new(),
             managed_identities: BTreeMap::from([("ups".into(), "cp1500".into())]),
+            created_groups: Vec::new(),
             backup_reference: transaction.stamp.clone(),
             transaction_outcome: TransactionOutcome::Applied,
         }
@@ -1977,6 +2265,7 @@ mod tests {
             targets: Vec::new(),
             services: Vec::new(),
             membership_additions: Vec::new(),
+            created_groups: Vec::new(),
             operations: Vec::new(),
         };
         assert_eq!(begin(&host, &request).unwrap(), None);
@@ -2213,6 +2502,7 @@ mod tests {
             targets: vec![PathBuf::from(STATE_PATH)],
             services: Vec::new(),
             membership_additions: Vec::new(),
+            created_groups: Vec::new(),
             operations: vec![OperationIntent {
                 id: "state-completion".into(),
                 target: None,
@@ -2268,6 +2558,7 @@ mod tests {
             targets: vec![PathBuf::from(STATE_PATH)],
             services: Vec::new(),
             membership_additions: Vec::new(),
+            created_groups: Vec::new(),
             operations: Vec::new(),
         };
         let transaction = begin(&host, &request).unwrap().unwrap();
@@ -2310,6 +2601,7 @@ mod tests {
             targets: vec![PathBuf::from(STATE_PATH)],
             services: Vec::new(),
             membership_additions: Vec::new(),
+            created_groups: Vec::new(),
             operations: vec![OperationIntent {
                 id: "install-nut".into(),
                 target: None,
@@ -2359,6 +2651,7 @@ mod tests {
             targets: vec![PathBuf::from("/etc/nut/../shadow")],
             services: Vec::new(),
             membership_additions: Vec::new(),
+            created_groups: Vec::new(),
             operations: Vec::new(),
         };
         assert!(

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add validated init rollback planning and restoration with the shared writer
+  lock, resumable private progress records, byte/metadata restoration, absent
+  target removal, exact membership reversal, and safe cleanup of an unused
+  transaction-created operator group. Fresh OL/no-OB/LB/FSD evidence gates
+  service activity; packages and package-owned users remain installed. Add
+  doctor `state.drift` and `state.backup` checks for applied outputs and backup
+  availability, and enforce the exact operator command allowlist and CLI file
+  ownership/modes. See `docs/init-rollback.md`.
 - Add safe init convergence orchestration: root/applicability/reviewed-hash
   validation under the shared writer lock, coordinated transaction and
   resource operations, service dependency effects in driver/server/monitor
@@ -41,7 +49,7 @@
   UPS observations reused by doctor. The test fake records effects, queues
   command and UPS results, and injects operation failures without touching the
   OS or port 3493.
-- Ship `nut doctor` with a 40-check registry, JSON, `--strict`/`--observe`/`--list`,
+- Ship `nut doctor` with a 45-check registry, JSON, `--strict`/`--observe`/`--list`,
   positional ID and section filters, generated `docs/doctor-checks.md`, and a
   `POWEROFF_WAIT` warning against full-charge runtime plus 10 minutes.
 - Extend `Host` with metadata, current executable, and recorded sleep; extend the

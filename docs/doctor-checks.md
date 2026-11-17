@@ -194,7 +194,19 @@ Needs root: yes
 
 ### `root.perms`
 
-`/etc/nut/*` is `root:nut` 0640; the hook is `root:root` 0755.
+NUT configs are `root:nut` 0640, the hook is `root:root` 0755, and CLI config/secret ownership is least-privilege.
+
+Needs root: yes
+
+### `state.drift`
+
+Validate the applied state record, installed host config, recorded managed outputs, and pending recovery state.
+
+Needs root: yes
+
+### `state.backup`
+
+The state record points to a complete, private, validated rollback manifest and file set.
 
 Needs root: yes
 
