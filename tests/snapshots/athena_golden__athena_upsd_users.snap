@@ -9,5 +9,8 @@ upsmon primary
 
 [nut-operator]
 password = @OPERATOR_PASSWORD@
-instcmds = beeper.disable, beeper.enable, beeper.mute, test.battery.start.quick, test.battery.stop
-actions = SET
+    instcmds = beeper.disable
+    instcmds = beeper.enable
+    instcmds = beeper.mute
+    instcmds = test.battery.start.quick
+    instcmds = test.battery.stop

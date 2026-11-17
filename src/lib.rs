@@ -12,6 +12,7 @@ pub mod events;
 pub mod fake_upsd;
 pub mod firmware;
 pub mod host;
+pub mod init;
 pub mod journal;
 pub mod profiles;
 pub mod render;

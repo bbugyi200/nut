@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `nut init` planning with typed observations and a pure deterministic
+  planner: explicit package, device, file, membership, fstab, retirement,
+  service, and state steps, secret adoption and rotation intents, stable
+  SHA-256 plan hashes, partial previews, and least-privilege rendering. Dummy
+  profiles resolve without fictional USB IDs; the operator account grants only
+  the five approved `instcmds` directives with no `actions` grant.
 - Extend `Host` with protected no-follow atomic replacement and removal, secure
   directories, exclusive apply locking, deterministic entropy, bounded argv
   execution with secret-safe errors and inherited-TTY spawning, and injectable

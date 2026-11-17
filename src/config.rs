@@ -363,6 +363,17 @@ fn resolve_usb(
     entry: &UpsHostEntry,
     profile: &UpsProfile,
 ) -> Result<(Sourced<String>, Sourced<String>), ConfigError> {
+    if profile.driver == "dummy-ups" && profile.usb_ids.is_empty() {
+        let vendorid = match &entry.usb_match.vendorid {
+            Some(value) => Sourced::host(normalize_usb_part(value)?),
+            None => Sourced::default_value(String::new()),
+        };
+        let productid = match &entry.usb_match.productid {
+            Some(value) => Sourced::host(normalize_usb_part(value)?),
+            None => Sourced::default_value(String::new()),
+        };
+        return Ok((vendorid, productid));
+    }
     let vendorid = if let Some(value) = &entry.usb_match.vendorid {
         Sourced::host(normalize_usb_part(value)?)
     } else if let Some(id) = unique_vendor(profile) {

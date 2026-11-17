@@ -25,8 +25,13 @@ pub const LIVE_PATHS: &[(&str, &str)] = &[
     (HOOK_NAME, HOOK_PATH),
 ];
 
-const OPERATOR_INSTCMDS: &str =
-    "beeper.disable, beeper.enable, beeper.mute, test.battery.start.quick, test.battery.stop";
+pub const OPERATOR_INSTCMDS: &[&str] = &[
+    "beeper.disable",
+    "beeper.enable",
+    "beeper.mute",
+    "test.battery.start.quick",
+    "test.battery.stop",
+];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RenderedFiles {
@@ -237,17 +242,19 @@ pub fn render_ups_conf(config: &ResolvedConfig) -> Result<String, RenderError> {
 pub fn render_upsd_users() -> Result<String, RenderError> {
     validate_token("upsmon password placeholder", UPSMON_PLACEHOLDER)?;
     validate_token("operator password placeholder", OPERATOR_PLACEHOLDER)?;
-    Ok(format!(
+    let mut out = format!(
         "{MANAGED_HEADER}\n\
 [upsmon]\n\
     password = {UPSMON_PLACEHOLDER}\n\
     upsmon primary\n\
 \n\
 [{OPERATOR_USER}]\n\
-    password = {OPERATOR_PLACEHOLDER}\n\
-    instcmds = {OPERATOR_INSTCMDS}\n\
-    actions = SET\n"
-    ))
+    password = {OPERATOR_PLACEHOLDER}\n"
+    );
+    for cmd in OPERATOR_INSTCMDS {
+        out.push_str(&format!("    instcmds = {cmd}\n"));
+    }
+    Ok(out)
 }
 
 pub fn render_upsmon_conf(config: &ResolvedConfig) -> Result<String, RenderError> {
@@ -411,8 +418,20 @@ pub fn normalize_deployed_active_lines(name: &str, text: &str) -> Vec<String> {
             {
                 lines.push(format!("[{OPERATOR_USER}]"));
                 lines.push(format!("password = {OPERATOR_PLACEHOLDER}"));
-                lines.push(format!("instcmds = {OPERATOR_INSTCMDS}"));
-                lines.push("actions = SET".to_owned());
+                for cmd in OPERATOR_INSTCMDS {
+                    lines.push(format!("instcmds = {cmd}"));
+                }
+            } else {
+                // Drop any legacy operator grant that must not survive adoption.
+                lines.retain(|line| line.trim() != "actions = SET");
+                let combined = format!("instcmds = {}", OPERATOR_INSTCMDS.join(", "));
+                lines.retain(|line| line.trim() != combined.trim());
+                for cmd in OPERATOR_INSTCMDS {
+                    let wanted = format!("instcmds = {cmd}");
+                    if !lines.iter().any(|line| line.trim() == wanted) {
+                        lines.push(wanted);
+                    }
+                }
             }
         }
         HOOK_NAME | "athena-upssched-cmd" => {
