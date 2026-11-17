@@ -88,3 +88,23 @@ fn doctor_help_matches_reference() {
         include_str!("reference/doctor-help.txt")
     );
 }
+
+#[test]
+fn init_help_matches_reference() {
+    let output = nut(&["init", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/init-help.txt")
+    );
+}
+
+#[test]
+fn rollback_help_matches_reference() {
+    let output = nut(&["rollback", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        include_str!("reference/rollback-help.txt")
+    );
+}

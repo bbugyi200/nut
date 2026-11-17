@@ -199,21 +199,41 @@ pub enum NotifyAction {
 #[derive(Args, Debug, Default)]
 pub struct InitArgs {
     /// Show the plan without applying changes.
-    #[arg(long)]
+    #[arg(short = 'n', long)]
     pub dry_run: bool,
+
+    /// Rotate both managed credentials instead of adopting existing ones.
+    #[arg(long)]
+    pub rotate_secrets: bool,
 
     /// Apply only when the recomputed plan matches this hash.
     #[arg(long, value_name = "HASH")]
     pub expect_plan: Option<String>,
+
+    /// Apply the reviewed plan without an interactive prompt.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
+
+    /// UPS name (defaults to the selected host configuration).
+    #[arg(long, value_name = "UPS")]
+    pub ups: Option<String>,
 }
 
 #[derive(Args, Debug, Default)]
 pub struct RollbackArgs {
     /// List available backups.
-    #[arg(long)]
+    #[arg(short = 'l', long)]
     pub list: bool,
 
-    /// Backup stamp to restore.
+    /// Show the restore plan without changing anything.
+    #[arg(short = 'n', long)]
+    pub dry_run: bool,
+
+    /// Restore without an interactive prompt.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
+
+    /// Backup stamp to restore (defaults to the newest complete backup).
     pub stamp: Option<String>,
 }
 

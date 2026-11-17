@@ -41,6 +41,8 @@ See [development](docs/development.md) for the local gate and CI.
 - `nut bios guide` prints a numbered keyboard walkthrough.
 - `nut bios profile list|show|new` lists, prints, or scaffolds a board profile.
 - `nut doctor [CHECK]...` reports protection checks with evidence and a `→` fix command; `--list` prints the catalog, `--observe SECS` watches driver restarts, and `--strict` fails on warnings. See [doctor checks](docs/doctor-checks.md). Doctor never fixes anything.
+- `nut init [-n/--dry-run] [--rotate-secrets] [--expect-plan HASH] [-y/--yes]` previews the deterministic convergence plan; interactive runs confirm before applying, non-root elevation uses the reviewed `sudo -- /usr/local/bin/nut` argv, and `--dry-run`/`--json` never mutate or elevate.
+- `nut rollback [STAMP] [-l/--list] [-n/--dry-run] [-y/--yes]` lists backups or restores the selected transaction with the shared writer lock and safe-online gates; list and dry-run never mutate or elevate.
 - `nut drill` shows the four recovery proofs and their freshness.
 - `sudo nut drill blip|ac-loss|cycle|outage` guides an interactive, guarded physical drill; `sudo nut drill report` records what happened after it. See [drill guidance](docs/drills.md).
 

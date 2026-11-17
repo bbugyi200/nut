@@ -153,6 +153,13 @@ remote host +args:
                 fi
             done
             ;;
+        rollback)
+            for arg in "${scan[@]}"; do
+                if [[ "$arg" == "--list" || "$arg" == "-l" || "$arg" == "--dry-run" || "$arg" == "-n" ]]; then
+                    allowed=1
+                fi
+            done
+            ;;
         completion)
             [[ "$action" == "status" || "$action" == "-h" || "$action" == "--help" || -z "$action" ]] && allowed=1
             ;;

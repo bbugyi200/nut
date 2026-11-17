@@ -7,6 +7,7 @@
 //! injected [`Host`] boundary. `plan` is pure: the same inputs always produce
 //! the same ordered steps and the same authoritative hash.
 
+pub mod cli;
 pub mod converge;
 mod hash;
 mod observe;

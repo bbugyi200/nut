@@ -71,6 +71,18 @@ fn protocol_tree_groups_flags_values_and_paths() {
         doctor.contains("protect.poweroff-wait\t") && doctor.contains("hw.usb\t"),
         "{doctor}"
     );
+    let init = complete(&["nut", "init", "--"]);
+    assert!(init.contains("--dry-run\t"), "{init}");
+    assert!(init.contains("--expect-plan\t"), "{init}");
+    assert!(init.contains("--rotate-secrets\t"), "{init}");
+    assert!(init.contains("--yes\t"), "{init}");
+    assert!(init.contains("--ups\t"), "{init}");
+    assert!(complete(&["nut", "init", "-"]).contains("-n\t"));
+    let rollback = complete(&["nut", "rollback", "--"]);
+    assert!(rollback.contains("--list\t"), "{rollback}");
+    assert!(rollback.contains("--dry-run\t"), "{rollback}");
+    assert!(rollback.contains("--yes\t"), "{rollback}");
+    assert!(complete(&["nut", "rollback", "-"]).contains("-l\t"));
 }
 
 #[test]

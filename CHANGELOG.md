@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Bind reviewed plans to privileged CLI execution: `nut init` with
+  `-n/--dry-run`, `--rotate-secrets`, `--expect-plan HASH`, and `-y/--yes` plus
+  `nut rollback [STAMP]` with `-l/--list`, `-n/--dry-run`, and `-y/--yes`.
+  Interactive runs preview before applying, non-root elevation requires a
+  terminal and the root-owned `/usr/local/bin/nut` with safe ancestors through
+  the exact `sudo --` argv, and list/dry-run never mutate or elevate. JSON is
+  schema-versioned and redacted, help and completion cover the new flags, and
+  width 60/80/120 Unicode/ASCII screens are snapshot-tested. Conflicting flags
+  use exit 2; operational refusals use exit 1.
 - Add validated init rollback planning and restoration with the shared writer
   lock, resumable private progress records, byte/metadata restoration, absent
   target removal, exact membership reversal, and safe cleanup of an unused

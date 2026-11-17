@@ -212,11 +212,31 @@ fn execute<H: Host, O: Write>(cli: Cli, host: &H, stdout: &mut O) -> Result<i32,
             host,
             stdout,
         ),
-        Command::Beeper(_)
-        | Command::Test(_)
-        | Command::Notify(_)
-        | Command::Init(_)
-        | Command::Rollback(_) => Err(NutError::operational(
+        Command::Init(args) => crate::init::cli::run_init(
+            args,
+            crate::init::cli::InitOutput {
+                config_path: cli.config.as_deref(),
+                json: cli.json,
+                ascii: cli.ascii,
+                color: cli.color,
+                verbose: cli.verbose,
+            },
+            host,
+            stdout,
+        ),
+        Command::Rollback(args) => crate::init::cli::run_rollback(
+            args,
+            crate::init::cli::RollbackOutput {
+                config_path: cli.config.as_deref(),
+                json: cli.json,
+                ascii: cli.ascii,
+                color: cli.color,
+                verbose: cli.verbose,
+            },
+            host,
+            stdout,
+        ),
+        Command::Beeper(_) | Command::Test(_) | Command::Notify(_) => Err(NutError::operational(
             "this command is provided by a later nut phase",
         )),
     }

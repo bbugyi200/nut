@@ -1,0 +1,6 @@
+---
+source: src/init/cli.rs
+expression: output
+---
+ nut rollback · athena · 0 backup(s)
+No complete init backups.

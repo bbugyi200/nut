@@ -63,8 +63,10 @@ journal after each effect so retries are idempotent. `state.drift` and
 record, its output fingerprints, and its backup reference. See
 [init resource application](init-resources.md),
 [init convergence](init-converge.md), and [init rollback](init-rollback.md)
-for the executor, coordinator, and recovery contracts. The CLI wiring follows
-in the next init phase.
+for the executor, coordinator, and recovery contracts. `init::cli` binds them
+to `nut init` and `nut rollback` with plan-hash confirmation, root-owned
+binary checks, privileged preview elevation, redacted JSON, and width-aware
+screens.
 
 `just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
 then runs the real CLI against it. `just fake-upsd` serves the fixture for manual

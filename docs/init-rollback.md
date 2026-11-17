@@ -2,7 +2,11 @@
 
 The rollback library restores a completed `nut init` transaction from its
 private backup. Its API is `init::rollback::list_backups`, `plan`, and
-`restore`; the command-line interface is wired in the following CLI phase.
+`restore`, bound to `nut rollback [STAMP] [-l/--list] [-n/--dry-run] [-y/--yes]`
+with redacted JSON and width-aware screens. List and dry-run never mutate or
+elevate; restore needs root and an explicit confirmation, elevating through the
+reviewed `sudo -- /usr/local/bin/nut` argv only from an interactive terminal
+with a root-owned binary.
 
 ## Review and selection
 

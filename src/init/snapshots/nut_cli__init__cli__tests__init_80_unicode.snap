@@ -1,0 +1,20 @@
+---
+source: src/init/cli.rs
+expression: output
+---
+ nut init · athena · plan c98c4cfb
+Steps 7 files · 3 services · 0 accounts · 1 other
+~ file:/etc/nut/nut.conf update /etc/nut/nut.conf (secrets masked)
+~ file:/etc/nut/ups.conf update /etc/nut/ups.conf (secrets masked)
+~ file:/etc/nut/upsd.users update /etc/nut/upsd.users (secrets masked)
+~ file:/etc/nut/upsmon.conf update /etc/nut/upsmon.conf (secrets masked)
+~ file:/etc/nut/upssched.conf update /etc/nut/upssched.conf (secrets masked)
+~ file:/usr/local/sbin/nut-upssched-cmd update /usr/local/sbin/nut-upssched-cmd
+(secrets masked)
+~ file:/etc/nut-cli/operator.secret install protected operator credential
+(secret masked)
+▸ service:restart:nut-driver@cp1500.service restart impacted
+nut-driver@cp1500.service once
+▸ service:restart:nut-server.service restart impacted nut-server.service once
+▸ service:restart:nut-monitor.service restart impacted nut-monitor.service once
++ state:record record verified convergence state after verification

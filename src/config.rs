@@ -631,6 +631,11 @@ fn render_from_host<H: Host>(
     render::render(&resolved).map_err(|error| NutError::operational(error.to_string()))
 }
 
+/// Scaffold text for `nut init` missing-config guidance without writing files.
+pub fn scaffold_for_init<H: Host>(host: &H, catalog: &ProfileCatalog) -> Result<String, NutError> {
+    scaffold_from_discovery(host, catalog)
+}
+
 fn scaffold_from_discovery<H: Host>(
     host: &H,
     catalog: &ProfileCatalog,

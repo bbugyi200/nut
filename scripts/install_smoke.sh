@@ -13,6 +13,11 @@ for shell in zsh bash; do
     nut completion install "$shell" --target "$root/$shell"
 done
 nut completion status --json
+nut init --dry-run --help >/dev/null
+nut rollback --list --help >/dev/null
+nut rollback --list >/dev/null
+nut init --dry-run 2>/dev/null || true
+nut rollback --dry-run 2>/dev/null || true
 nut completion uninstall
 test ! -e "$root/zsh/_nut"
 test ! -e "$root/bash/nut"
