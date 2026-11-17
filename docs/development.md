@@ -33,6 +33,30 @@ Host unit tests cover atomic replacement in a temporary directory under
 `target/` and prove fake timeouts, failure injection, and UPS scripting
 without contacting port 3493.
 
+The init transaction store lives under `src/init/transaction.rs`. Its
+transaction handle retains the shared `/var/lib/nut-cli.init.lock` for the full
+writer operation. Callers that need to hash-check a re-observation under the
+lock use `acquire_writer_lock` and transfer the guard to `begin_locked`. A
+nonempty transaction snapshots every allowlisted target, including absent
+targets and the prior state record, into root-owned `0700` backup directories
+with `0600` manifest and blob files. The protected pending journal is
+published only after the complete manifest. File operations carry before/after
+fingerprints and durable planned/started/completed checkpoints; recovery
+compares started operations to current state and leaves unobserved external
+operations unresolved. A caller must not infer that a started operation did
+not run merely because its completion checkpoint is absent.
+
+Newly generated credentials are hex materialized into private blobs after the
+pending journal exists and before their first consumer file is changed. A
+retry reuses the existing blob. The state record is atomically published only
+after verification. Its intent and publication are journaled before the pending
+record is removed. If interrupted after writing state but before recording
+publication, recovery compares the state bytes with the intent and resumes
+without rewriting them. Empty plans return before taking the lock,
+creating directories, generating entropy, or writing backups or state. The
+transaction module has no command-line dispatch yet; later init/rollback phases
+compose these APIs with resource application and verification.
+
 `just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
 then runs the real CLI against it. `just fake-upsd` serves the fixture for manual
 experiments. For a deliberate live read, `just remote-status HOST` and

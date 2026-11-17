@@ -25,7 +25,12 @@ These rules apply to every command and implementation phase.
    or JSON. Diffs mask passwords; operator credentials belong in a file restricted
    to the appropriate group. Privileged file writes use same-directory temporary
    files, ownership and mode before publication, fsync, and atomic rename. Secret-bearing
-   commands must not copy captured output into error text.
+  commands must not copy captured output into error text. Init transaction preimages
+  live only in root-owned `0700` backup directories and `0600` blobs. Pending
+  journals contain references and fingerprints, while generated credentials are
+  persisted privately once before either credential endpoint is changed. Recovery
+  compares started operations to recorded before/after states; unknown results remain
+  unresolved until freshly observed.
 5. **Keep recipes offline.** Build and test recipes must never touch a real UPS,
    power anything off, or implicitly contact another host. Any future recipe that
    reaches a host must require that host as an explicit argument.

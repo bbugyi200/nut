@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a durable init transaction store with private backup manifests and blobs,
+  absent-target markers, shared writer locking, checkpoint reconciliation,
+  one-time private secret materialization, and idempotent state finalization.
+  Interrupted operations are reconciled against their before/after fingerprints;
+  corrupt or out-of-scope backup data fails closed, and public backup summaries
+  contain no file contents or password digests.
 - Add `nut init` planning with typed observations and a pure deterministic
   planner: explicit package, device, file, membership, fstab, retirement,
   service, and state steps, secret adoption and rotation intents, stable

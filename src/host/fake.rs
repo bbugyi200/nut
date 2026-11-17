@@ -13,6 +13,7 @@ type CommandQueue = VecDeque<(
     Option<(OsString, Vec<OsString>)>,
     Result<ProcessOutput, String>,
 )>;
+type FailureQueue = VecDeque<(String, usize, String)>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HostEffect {
@@ -65,7 +66,7 @@ pub struct FakeHost {
     ups_queue: RefCell<VecDeque<UpsObservation>>,
     ups_list: RefCell<Vec<(String, String)>>,
     entropy: RefCell<Vec<u8>>,
-    failures: RefCell<VecDeque<(String, String)>>,
+    failures: RefCell<FailureQueue>,
     effects: RefCell<Vec<HostEffect>>,
     lock: Rc<RefCell<Option<PathBuf>>>,
     now: Option<SystemTime>,
@@ -180,8 +181,21 @@ impl FakeHost {
     pub fn fail_next(self, operation: impl Into<String>, message: impl Into<String>) -> Self {
         self.failures
             .borrow_mut()
-            .push_back((operation.into(), message.into()));
+            .push_back((operation.into(), 0, message.into()));
         self
+    }
+
+    /// Fail an operation after the requested number of matching successes.
+    /// This makes durable transaction crash boundaries reproducible.
+    pub fn fail_after(
+        &self,
+        operation: impl Into<String>,
+        successful_calls: usize,
+        message: impl Into<String>,
+    ) {
+        self.failures
+            .borrow_mut()
+            .push_back((operation.into(), successful_calls, message.into()));
     }
 
     pub fn effects(&self) -> Vec<HostEffect> {
@@ -253,9 +267,15 @@ impl FakeHost {
 
     fn check_failure(&self, operation: &str) -> Result<(), HostError> {
         let mut failures = self.failures.borrow_mut();
-        if failures.front().is_some_and(|(name, _)| name == operation) {
-            let (_, message) = failures.pop_front().expect("front was present");
-            return Err(HostError::message(message));
+        if failures
+            .front()
+            .is_some_and(|(name, _, _)| name == operation)
+        {
+            let (name, remaining, message) = failures.pop_front().expect("front was present");
+            if remaining == 0 {
+                return Err(HostError::message(message));
+            }
+            failures.push_front((name, remaining - 1, message));
         }
         Ok(())
     }
