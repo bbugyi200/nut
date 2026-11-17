@@ -38,7 +38,13 @@ passes that binary to the root harness through `NUT_E2E_BIN` (sudo's
 installs it root-owned at `/usr/local/bin/nut`, and runs `just e2e` against a local
 dummy-ups `.dev` source. The harness proves hash-bound init, root `init --yes`,
 idempotent reruns, dummy OB/OL events, and rollback. Runner-only shutdown and
-sendmail stubs are installed before NUT starts. `just e2e-lint` validates those
+sendmail stubs are installed before NUT starts by renaming the originals aside,
+never copying through a symlink: on usrmerge Ubuntu `/sbin/shutdown` and
+`/usr/sbin/shutdown` are one symlink to `systemctl`, and the harness asserts
+`systemctl` survives. Because init's post-apply verification includes
+`boot.fstab`, the harness comments out runner fstab entries that are neither
+mounted nor active swap when `findmnt --verify` fails, and stops with the
+`findmnt` report if it still fails. `just e2e-lint` validates those
 fixtures during `just check` without contacting a host or starting NUT.
 Host unit tests cover atomic replacement in a temporary directory under
 `target/` and prove fake timeouts, failure injection, and UPS scripting

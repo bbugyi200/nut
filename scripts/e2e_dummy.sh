@@ -69,7 +69,9 @@ redact() {
     python3 -c 'import re,sys
 text=sys.stdin.read()
 text=re.sub(r"(?im)^(.*password\s*=\s*).*$", r"\1 ***", text)
-text=re.sub(r"(?im)(MONITOR\s+\S+\s+\S+\s+\S+\s+)\S+", r"\1***", text)
+# upsmon.conf directive only: case-sensitive and line-local, so prose such as
+# "monitor is unavailable" in doctor JSON is not mangled.
+text=re.sub(r"(?m)^([ \t]*MONITOR[ \t]+\S+[ \t]+\S+[ \t]+\S+[ \t]+)\S+", r"\1***", text)
 sys.stdout.write(text)
 '
 }
@@ -94,6 +96,8 @@ preserve_diag() {
         journalctl -u 'nut-driver@dummy.service' -u nut-server.service -u nut-monitor.service --no-pager -n 200 2>&1 | redact || true
         echo "=== dummy.dev ==="
         cat "$DEV_LIVE" 2>/dev/null || true
+        echo "=== findmnt --verify --verbose ==="
+        findmnt --verify --verbose 2>&1 || true
         echo "=== shutdown log ==="
         cat "$SHUTDOWN_LOG" 2>/dev/null || true
     } >"$DIAG_DIR/failure.txt" || true
@@ -136,7 +140,29 @@ ob = (root / "tests/fixtures/e2e/dummy-ob.dev").read_text()
 assert "ups.status: OB DISCHRG" in ob
 print("e2e fixtures ok")
 PY
+    lint_stub_helper
     log "lint ok"
+}
+
+# Offline regression: stubbing a usrmerge shutdown symlink must not write
+# through it into systemctl, and a second alias or rerun keeps the backup.
+lint_stub_helper() {
+    local tmp
+    tmp=$(mktemp -d)
+    mkdir -p "$tmp/usr/bin" "$tmp/usr/sbin"
+    ln -s usr/sbin "$tmp/sbin"
+    printf 'real systemctl\n' >"$tmp/usr/bin/systemctl"
+    ln -s ../bin/systemctl "$tmp/usr/sbin/shutdown"
+    stub_helper "$STUB_DIR/shutdown" "$tmp/sbin/shutdown"
+    stub_helper "$STUB_DIR/shutdown" "$tmp/usr/sbin/shutdown"
+    [[ $(cat "$tmp/usr/bin/systemctl") == "real systemctl" ]] \
+        || { rm -rf "$tmp"; fail "stub_helper wrote through the shutdown symlink"; }
+    [[ $(readlink "$tmp/usr/sbin/shutdown.nut-e2e-orig") == ../bin/systemctl ]] \
+        || { rm -rf "$tmp"; fail "stub_helper lost the original shutdown symlink"; }
+    cmp -s "$STUB_DIR/shutdown" "$tmp/usr/sbin/shutdown" \
+        || { rm -rf "$tmp"; fail "stub_helper did not install the shutdown stub"; }
+    rm -rf "$tmp"
+    log "stub install keeps usrmerge systemctl intact"
 }
 
 snapshot_state() {
@@ -235,21 +261,86 @@ print("acl ok")
 PY
 }
 
+# Replace one runner helper with a stub without ever writing through a
+# symlink. On usrmerge Ubuntu /sbin aliases /usr/sbin and shutdown is a
+# symlink to systemctl, so copy-based backups or installs onto the link would
+# overwrite systemctl itself. Rename the original entry aside instead.
+stub_helper() {
+    local stub=$1 target=$2 dir path
+    dir=$(realpath -e "$(dirname "$target")")
+    path=$dir/$(basename "$target")
+    if [[ -e $path || -L $path ]] && [[ ! -e $path.nut-e2e-orig && ! -L $path.nut-e2e-orig ]]; then
+        mv -T "$path" "$path.nut-e2e-orig"
+    fi
+    rm -f "$path"
+    install -m 0755 "$stub" "$path"
+}
+
 install_stubs() {
     export NUT_E2E_SHUTDOWN_LOG=$SHUTDOWN_LOG
     export NUT_E2E_MAIL_LOG=$MAIL_LOG
     : >"$SHUTDOWN_LOG"
     : >"$MAIL_LOG"
+    local target systemctl_bin
     for target in /sbin/shutdown /usr/sbin/shutdown; do
-        if [[ -e $target || -L $target ]]; then
-            cp -a "$target" "$target.nut-e2e-orig"
-        fi
-        install -m 0755 "$STUB_DIR/shutdown" "$target"
+        stub_helper "$STUB_DIR/shutdown" "$target"
     done
-    if [[ -e /usr/sbin/sendmail || -L /usr/sbin/sendmail ]]; then
-        cp -a /usr/sbin/sendmail /usr/sbin/sendmail.nut-e2e-orig
+    stub_helper "$STUB_DIR/sendmail" /usr/sbin/sendmail
+    systemctl_bin=$(readlink -f "$(command -v systemctl)")
+    if cmp -s "$STUB_DIR/shutdown" "$systemctl_bin" || cmp -s "$STUB_DIR/sendmail" "$systemctl_bin"; then
+        fail "stub installation replaced $systemctl_bin"
     fi
-    install -m 0755 "$STUB_DIR/sendmail" /usr/sbin/sendmail
+    systemctl --version >/dev/null || fail "systemctl is unusable after stub installation"
+    [[ ! -s $SHUTDOWN_LOG ]] || fail "stub installation invoked the shutdown stub"
+    log "shutdown and sendmail stubs installed; systemctl intact"
+}
+
+# Doctor's boot.fstab check is part of init's post-apply verification. Hosted
+# runner images can ship cloud fstab entries for disks this VM does not have,
+# so make the disposable runner's fstab verify before NUT is touched: comment
+# out only entries that are neither mounted nor active swap. A remaining
+# failure stops here with the findmnt report instead of a confusing
+# post-apply compensation.
+prepare_runner_fstab() {
+    local report=$DIAG_DIR/findmnt-verify.txt
+    if findmnt --verify --verbose >"$report" 2>&1; then
+        log "runner fstab verifies"
+        return 0
+    fi
+    log "runner fstab fails findmnt --verify; disabling unmounted entries in this disposable runner"
+    cat "$report"
+    cp -a /etc/fstab "$DIAG_DIR/fstab.orig"
+    python3 - <<'PY'
+import os
+import subprocess
+from pathlib import Path
+
+fstab = Path("/etc/fstab")
+swaps = {line.split()[0] for line in Path("/proc/swaps").read_text().splitlines()[1:] if line.split()}
+out = []
+for line in fstab.read_text().splitlines():
+    fields = line.split()
+    if not fields or fields[0].startswith("#") or len(fields) < 3:
+        out.append(line)
+        continue
+    source, target, fstype = fields[0], fields[1], fields[2]
+    if fstype == "swap":
+        resolved = subprocess.run(["findfs", source], capture_output=True, text=True).stdout.strip() if "=" in source else source
+        keep = resolved in swaps or os.path.realpath(resolved) in swaps
+    else:
+        keep = subprocess.run(["findmnt", "-rn", "--mountpoint", target], capture_output=True).returncode == 0
+    if keep:
+        out.append(line)
+    else:
+        print(f"e2e: disabled unmounted fstab entry: {line}")
+        out.append(f"# nut-e2e disabled unmounted entry: {line}")
+fstab.write_text("\n".join(out) + "\n")
+PY
+    if ! findmnt --verify --verbose >"$report" 2>&1; then
+        cat "$report"
+        fail "runner fstab still fails findmnt --verify; init verification would fail boot.fstab"
+    fi
+    log "runner fstab verifies after disabling unmounted entries"
 }
 
 install_nut_packages() {
@@ -549,6 +640,7 @@ main() {
 
     install_nut_packages
     install_stubs
+    prepare_runner_fstab
     install_dummy_source
     cd "$ROOT"
     install_cli

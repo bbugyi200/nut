@@ -5,6 +5,12 @@
 - Run the dummy-ups e2e job for real: build the locked release binary as the
   unprivileged runner and pass it to the root harness through `NUT_E2E_BIN`,
   calling `just` by absolute path because sudo's `secure_path` hid it.
+  Install the runner shutdown/sendmail stubs by renaming the originals aside
+  so the usrmerge `/sbin/shutdown -> systemctl` symlink no longer gets
+  `systemctl` overwritten by the stub, make the disposable runner's fstab
+  pass `findmnt --verify` before init verification, keep `findmnt` output in
+  failure diagnostics, and stop the `MONITOR` redaction from mangling doctor
+  prose.
 - Keep drill records inside the protected init state tree: `nut drill` now
   publishes records atomically as `root:root` 0600 files under the 0700
   `/var/lib/nut-cli/drills`, and non-root `nut doctor` skips the root-only
