@@ -17,11 +17,11 @@ Color output policy
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-auto
+auto: Color when writing to a terminal (default)
 .IP \(bu 2
-always
+always: Color even when piped
 .IP \(bu 2
-never
+never: Never color
 .RE
 .TP
 \fB\-s\fR, \fB\-\-since\fR \fI<TIME>\fR
@@ -58,6 +58,6 @@ Maximum stories or raw entries to show (1\-2000; default 20)
 Show only the most recent outage (alias for \-\-outages \-\-limit 1)
 .TP
 \fB\-h\fR, \fB\-\-help\fR
-Print help
+Print help (see a summary with \*(Aq\-h\*(Aq)
 .SH EXTRA
 System journal access may require sudo nut events. Optional systemd\-journal membership exposes all system logs; nut never changes it automatically.

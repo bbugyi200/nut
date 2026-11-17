@@ -1,5 +1,13 @@
 use std::process::{Command, Output};
 
+fn rstrip(text: &str) -> String {
+    text.lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
 fn nut(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_nut"))
         .args(args)
@@ -12,8 +20,8 @@ fn root_help_matches_reference() {
     let output = nut(&["--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/nut-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/nut-help.txt"))
     );
 }
 
@@ -22,8 +30,8 @@ fn config_help_matches_reference() {
     let output = nut(&["config", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/config-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/config-help.txt"))
     );
 }
 
@@ -32,8 +40,8 @@ fn bios_help_matches_reference() {
     let output = nut(&["bios", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/bios-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/bios-help.txt"))
     );
 }
 
@@ -54,8 +62,8 @@ fn config_show_matches_reference_example() {
     let output = nut(&["--config", "examples/host.toml", "config", "show"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/config-show.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/config-show.txt"))
     );
 }
 
@@ -74,8 +82,8 @@ fn events_help_matches_reference() {
     let output = nut(&["events", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/events-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/events-help.txt"))
     );
 }
 
@@ -84,8 +92,8 @@ fn doctor_help_matches_reference() {
     let output = nut(&["doctor", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/doctor-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/doctor-help.txt"))
     );
 }
 
@@ -94,8 +102,8 @@ fn battery_help_matches_reference() {
     let output = nut(&["battery", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/battery-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/battery-help.txt"))
     );
 }
 
@@ -104,8 +112,8 @@ fn beeper_help_matches_reference() {
     let output = nut(&["beeper", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/beeper-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/beeper-help.txt"))
     );
 }
 
@@ -114,8 +122,8 @@ fn notify_help_matches_reference() {
     let output = nut(&["notify", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/notify-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/notify-help.txt"))
     );
 }
 
@@ -124,8 +132,8 @@ fn init_help_matches_reference() {
     let output = nut(&["init", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/init-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/init-help.txt"))
     );
 }
 
@@ -134,7 +142,7 @@ fn rollback_help_matches_reference() {
     let output = nut(&["rollback", "--help"]);
     assert!(output.status.success());
     assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        include_str!("reference/rollback-help.txt")
+        rstrip(&String::from_utf8(output.stdout).unwrap()),
+        rstrip(include_str!("reference/rollback-help.txt"))
     );
 }

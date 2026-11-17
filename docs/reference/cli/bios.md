@@ -21,17 +21,29 @@ Commands:
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut bios guide
@@ -45,17 +57,29 @@ Usage: nut bios guide [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut bios setup
@@ -69,19 +93,32 @@ Usage: nut bios setup [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --yes
           Refused. BIOS setup cannot be unattended
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut bios attest
@@ -95,17 +132,29 @@ Usage: nut bios attest [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut bios profile
@@ -119,95 +168,149 @@ Usage: nut bios profile [OPTIONS] [COMMAND]
 
 Commands:
   list
-
+          List available board profiles
   show
-
+          Show one board profile in detail
   new
-
+          Scaffold a new board profile
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ### nut bios profile list
 
-
+List available board profiles
 
 ```text
+List available board profiles
+
 Usage: nut bios profile list [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ### nut bios profile show
 
-
+Show one board profile in detail
 
 ```text
+Show one board profile in detail
+
 Usage: nut bios profile show [OPTIONS] <ID>
 
 Arguments:
   <ID>
-
+          Board profile id to show
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ### nut bios profile new
 
-
+Scaffold a new board profile
 
 ```text
+Scaffold a new board profile
+
 Usage: nut bios profile new [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## Related

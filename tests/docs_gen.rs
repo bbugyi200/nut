@@ -370,6 +370,13 @@ fn generated_docs_match() {
         &nut_cli::doctor::catalog_markdown(),
         update,
     );
+    let completion_screen =
+        nut_cli::completion::menu::virtual_screen(&nut_cli::completion::engine::root_menu(), 80);
+    sync_file(
+        &root.join("docs/completion.txt"),
+        &completion_screen,
+        update,
+    );
 
     let screenshot = capture_demo_status(&root);
     assert!(

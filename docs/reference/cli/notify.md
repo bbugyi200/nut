@@ -15,17 +15,29 @@ Commands:
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut notify test
@@ -39,17 +51,29 @@ Usage: nut notify test [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## Related

@@ -72,6 +72,16 @@ $ nut doctor
 The committed demo capture in [`screenshot.txt`](screenshot.txt) is the live renderer
 against the scripted fixture, regenerated with `just screenshot`.
 
+## Completion
+
+Tab offers the next word: commands at a command slot, values at a value slot,
+options after `-` or at a leaf. One column, one hierarchy: headings flush left,
+candidates indented two spaces, every description starting in one shared column,
+matching `nut --help`. Every candidate explains itself; free-form slots show a
+hint, never silence. The palette follows the rules above: headings bold cyan
+(info), names bold (accent), descriptions dim (secondary). `NO_COLOR` turns
+color off.
+
 ## Related
 
 - [Architecture](architecture.md)

@@ -1,0 +1,12 @@
+---
+source: src/completion/engine.rs
+expression: "screen(&[\"nut\", \"-\"], 100)"
+---
+Options
+      --color <WHEN>   Color output policy
+      --ascii          Use ASCII symbols and bars
+  -j, --json           Emit machine-readable JSON where supported
+  -v, --verbose        Include additional diagnostic detail
+  -c, --config <PATH>  Read host settings from this file
+  -h, --help           Print help
+  -V, --version        Print version

@@ -17,23 +17,35 @@ Commands:
   uninstall
           Remove adapters whose bytes still match the recorded manifest
   zsh
-
+          Print the zsh adapter for manual installation
   bash
-
+          Print the bash adapter for manual installation
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut completion install
@@ -47,27 +59,46 @@ Usage: nut completion install [OPTIONS] [SHELL]
 
 Arguments:
   [SHELL]
-          [possible values: zsh, bash]
+          Shell to install the adapter for
+
+          Possible values:
+          - zsh:  Z shell
+          - bash: GNU Bash
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
   -n, --dry-run
           Preview without creating files
+
       --ascii
           Use ASCII symbols and bars
+
   -t, --target <TARGET>
           Directory in which to install the adapter
+
   -f, --force
           Replace a foreign or modified adapter
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut completion status
@@ -81,17 +112,29 @@ Usage: nut completion status [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut completion uninstall
@@ -105,67 +148,112 @@ Usage: nut completion uninstall [OPTIONS] [SHELL]
 
 Arguments:
   [SHELL]
-          [possible values: zsh, bash]
+          Shell to remove the adapter for
+
+          Possible values:
+          - zsh:  Z shell
+          - bash: GNU Bash
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
   -n, --dry-run
+          Preview without removing files
 
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut completion zsh
 
-
+Print the zsh adapter for manual installation
 
 ```text
+Print the zsh adapter for manual installation
+
 Usage: nut completion zsh [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut completion bash
 
-
+Print the bash adapter for manual installation
 
 ```text
+Print the bash adapter for manual installation
+
 Usage: nut completion bash [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## Related

@@ -23,25 +23,41 @@ Commands:
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
       --yes
           Refused. Drills need a person at the keyboard
+
       --ups <UPS>
           UPS name (defaults to the selected host configuration, or `cp1500`)
+
       --upsd-address <ADDRESS>
           Loopback upsd address (defaults to 127.0.0.1)
+
       --upsd-port <PORT>
           Loopback upsd port (defaults to 3493)
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut drill blip
@@ -55,17 +71,29 @@ Usage: nut drill blip [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut drill ac-loss
@@ -79,17 +107,29 @@ Usage: nut drill ac-loss [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut drill cycle
@@ -103,17 +143,29 @@ Usage: nut drill cycle [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut drill outage
@@ -127,17 +179,29 @@ Usage: nut drill outage [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## nut drill report
@@ -151,17 +215,29 @@ Usage: nut drill report [OPTIONS]
 
 Options:
       --color <WHEN>
-          Color output policy [default: auto] [possible values: auto, always, never]
+          Color output policy
+
+          Possible values:
+          - auto:   Color when writing to a terminal (default)
+          - always: Color even when piped
+          - never:  Never color
+
+          [default: auto]
+
       --ascii
           Use ASCII symbols and bars
+
   -j, --json
           Emit machine-readable JSON where supported
+
   -v, --verbose
           Include additional diagnostic detail
+
   -c, --config <PATH>
           Read host settings from this file
+
   -h, --help
-          Print help
+          Print help (see a summary with '-h')
 ```
 
 ## Related
