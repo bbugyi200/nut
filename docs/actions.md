@@ -86,3 +86,10 @@ dummy-ups may reject unsupported commands before checking authorization,
 the exact rendered stanza provides the ACL proof in that case. It also proves
 `nut beeper` degrades gracefully, `nut battery test` refuses to run without a
 terminal, and `nut notify test` delivers mail through the stub.
+
+## Related
+
+- [Safety contract](safety.md)
+- [Init and rollback](init.md)
+- [CLI reference](reference/cli/beeper.md)
+

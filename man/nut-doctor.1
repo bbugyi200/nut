@@ -1,0 +1,61 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-doctor 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-doctor \- Check UPS protection and recovery readiness
+.SH SYNOPSIS
+\fBnut doctor\fR [\fB\-\-color\fR] [\fB\-o\fR|\fB\-\-observe\fR] [\fB\-\-ascii\fR] [\fB\-S\fR|\fB\-\-strict\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-l\fR|\fB\-\-list\fR] [\fB\-\-ups\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-\-upsd\-address\fR] [\fB\-\-upsd\-port\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fICHECK\fR] 
+.SH DESCRIPTION
+Check UPS protection and recovery readiness
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-o\fR, \fB\-\-observe\fR \fI<SECS>\fR
+Run additional stability observations for this many seconds
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-S\fR, \fB\-\-strict\fR
+Treat warnings as failures
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-l\fR, \fB\-\-list\fR
+List the check catalog without running checks
+.TP
+\fB\-\-ups\fR \fI<UPS>\fR
+UPS name (defaults to the selected host configuration, or `cp1500`)
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-\-upsd\-address\fR \fI<ADDRESS>\fR
+Loopback upsd address (defaults to 127.0.0.1)
+.TP
+\fB\-\-upsd\-port\fR \fI<PORT>\fR
+Loopback upsd port (defaults to 3493)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fICHECK\fR]
+Check IDs or section prefixes

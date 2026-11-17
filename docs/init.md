@@ -108,3 +108,11 @@ and a local dummy-ups `.dev` source. It proves hash-bound init, the root
 `init --yes` path, dummy USB/outlet-command skips, a no-op second init, dummy
 OB/OL event recovery, and rollback of the selected stamp. `just check` stays
 offline; `just e2e` is the disposable job. See [development](development.md).
+
+## Related
+
+- [Getting started](getting-started.md)
+- [Host configuration](configuration.md)
+- [Safety contract](safety.md)
+- [CLI reference](reference/cli/init.md)
+

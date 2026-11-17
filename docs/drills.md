@@ -58,3 +58,11 @@ instead of reporting them as unknown.
 Drill records are evidence of what was observed and what the operator attested;
 they do not prove that every future outage will recover successfully. Never run a
 physical drill from an agent, build, CI job, or remote recipe.
+
+## Related
+
+- [Safety contract](safety.md)
+- [BIOS guidance](bios.md)
+- [Outage timeline](outage-timeline.md)
+- [CLI reference](reference/cli/drill.md)
+

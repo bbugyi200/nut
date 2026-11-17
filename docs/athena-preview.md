@@ -77,3 +77,10 @@ Operator and hook steps are not listed because those files also need
 root. The privileged preview flow is how a later interactive run obtains
 an authoritative hash. The staged `e2e-preview.toml` was removed after
 these commands.
+
+## Related
+
+- [Init and rollback](init.md)
+- [Getting started](getting-started.md)
+- [Development](development.md)
+

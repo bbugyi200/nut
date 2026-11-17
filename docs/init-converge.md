@@ -50,3 +50,10 @@ absent-output set, and actual group-creation record feed the `state.drift` and
 
 See [init rollback](init-rollback.md) for the validated restore API, service
 safety gates, and the limits of package rollback.
+
+## Related
+
+- [Init and rollback](init.md)
+- [Init resource application](init-resources.md)
+- [Architecture](architecture.md)
+

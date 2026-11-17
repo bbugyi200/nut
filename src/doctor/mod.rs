@@ -88,6 +88,9 @@ pub fn catalog_markdown() -> String {
             if entry.needs_root { "yes" } else { "no" }
         ));
     }
+    out.push_str(
+        "\n## Related\n\n- [Getting started](getting-started.md)\n- [Safety contract](safety.md)\n- [Guided recovery drills](drills.md)\n- [CLI reference](reference/cli/doctor.md)\n",
+    );
     out
 }
 

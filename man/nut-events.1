@@ -1,0 +1,63 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-events 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-events \- Show UPS event history
+.SH SYNOPSIS
+\fBnut events\fR [\fB\-\-color\fR] [\fB\-s\fR|\fB\-\-since\fR] [\fB\-\-ascii\fR] [\fB\-b\fR|\fB\-\-boot\fR] [\fB\-f\fR|\fB\-\-follow\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-o\fR|\fB\-\-outages\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-r\fR|\fB\-\-raw\fR] [\fB\-n\fR|\fB\-\-limit\fR] [\fB\-\-last\-outage\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Show UPS event history
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-s\fR, \fB\-\-since\fR \fI<TIME>\fR
+Include entries since a journalctl time (for example, \*(Aqtoday\*(Aq or \*(Aq\-2h\*(Aq)
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-b\fR, \fB\-\-boot\fR \fI<N>\fR
+Select a boot offset (0 is current, \-1 is previous)
+.TP
+\fB\-f\fR, \fB\-\-follow\fR
+Stream new entries and updated stories until interrupted
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-o\fR, \fB\-\-outages\fR
+Show only power outages, blips, and shutdowns
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-r\fR, \fB\-\-raw\fR
+Show source journal messages instead of stories
+.TP
+\fB\-n\fR, \fB\-\-limit\fR \fI<COUNT>\fR
+Maximum stories or raw entries to show (1\-2000; default 20)
+.TP
+\fB\-\-last\-outage\fR
+Show only the most recent outage (alias for \-\-outages \-\-limit 1)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH EXTRA
+System journal access may require sudo nut events. Optional systemd\-journal membership exposes all system logs; nut never changes it automatically.

@@ -1,0 +1,82 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut \- Manage and verify NUT UPS protection
+.SH SYNOPSIS
+\fBnut\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+A read\-first management CLI for Network UPS Tools. NUT\*(Aqs daemons remain the only part of the outage shutdown path.
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+nut\-status(1)
+Show UPS status
+.TP
+nut\-battery(1)
+Show battery charge and runtime, or run a guarded self\-test
+.TP
+nut\-events(1)
+Show UPS event history
+.TP
+nut\-beeper(1)
+Show or change the UPS beeper
+.TP
+nut\-notify(1)
+Send or inspect UPS notifications
+.TP
+nut\-init(1)
+Plan or apply NUT configuration
+.TP
+nut\-rollback(1)
+List or restore a configuration backup
+.TP
+nut\-config(1)
+Inspect, scaffold, render, or diff host settings
+.TP
+nut\-bios(1)
+Guide and verify BIOS recovery settings
+.TP
+nut\-doctor(1)
+Check UPS protection and recovery readiness
+.TP
+nut\-drill(1)
+Guide and record a physical outage drill
+.TP
+nut\-completion(1)
+Install, inspect, or remove shell completion
+.SH VERSION
+v0.1.0

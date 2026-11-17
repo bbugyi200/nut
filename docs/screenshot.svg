@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="544" height="248" viewBox="0 0 544.4 248.0" role="img" aria-label="nut status demo">
+  <rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+  <text font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#c9d1d9" xml:space="preserve">
+    <tspan x="16" y="31.3">nut status · demo</tspan>
+    <tspan x="16" y="49.3">Host            demo</tspan>
+    <tspan x="16" y="67.3">State           On line, charging</tspan>
+    <tspan x="16" y="85.3">Battery charge  100%  ████████████</tspan>
+    <tspan x="16" y="103.3">Runtime         25m 50s estimated</tspan>
+    <tspan x="16" y="121.3">Load            28%  ███▍</tspan>
+    <tspan x="16" y="139.3">Input voltage   122.0 V</tspan>
+    <tspan x="16" y="157.3">Battery test    No test initiated</tspan>
+    <tspan x="16" y="175.3"></tspan>
+    <tspan x="16" y="193.3">If power fails now, the host shutdown timer is 3m on battery.</tspan>
+    <tspan x="16" y="211.3">The UPS estimates 25m 50s at the current load.</tspan>
+    <tspan x="16" y="229.3">Estimated runtime after that timer: 22m 50s.</tspan>
+  </text>
+</svg>

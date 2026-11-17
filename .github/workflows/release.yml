@@ -1,0 +1,63 @@
+# Action pins copied from ci.yml; resolved from bob-cli on 2026-10-20.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  musl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install musl target
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools
+          rustup target add x86_64-unknown-linux-musl
+      - name: Build static musl binary
+        run: cargo build --locked --release --target x86_64-unknown-linux-musl --bin nut
+      - name: Package checksums
+        run: |
+          set -euo pipefail
+          src=target/x86_64-unknown-linux-musl/release/nut
+          dest=nut-x86_64-unknown-linux-musl
+          cp "$src" "$dest"
+          sha256sum "$dest" | tee "$dest.sha256"
+          file "$dest"
+          if ldd "$dest"; then
+            echo "expected a statically linked musl binary" >&2
+            exit 1
+          fi
+      - name: Attach artifacts to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+ ]]; then
+            echo "refusing to publish non-version tag $tag" >&2
+            exit 1
+          fi
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes "Static x86_64-unknown-linux-musl build of nut. Cut v0.1.0 only after athena adoption." \
+            nut-x86_64-unknown-linux-musl \
+            nut-x86_64-unknown-linux-musl.sha256

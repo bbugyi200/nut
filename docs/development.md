@@ -21,8 +21,18 @@ to enforce this project's `clippy.toml`.
   `status`, `doctor`, `init --dry-run`, `rollback --list/--dry-run`, and the other
   allowlisted verbs). It refuses `config new/render`, `bios setup`, `bios attest`,
   drills, init apply, rollback restore, and other write/power actions.
-- `just docs-gen` regenerates `docs/doctor-checks.md` from the doctor registry.
-  A drift test fails when the committed file does not match.
+- `just docs-gen` regenerates `docs/doctor-checks.md`, `docs/reference/cli/*.md`,
+  `man/*.1`, and the demo screenshot. Set `NUT_UPDATE_GOLDENS=1` (the recipe does).
+  Drift tests fail when the committed files do not match.
+- `just screenshot` is an alias for `just docs-gen` and refreshes
+  `docs/screenshot.txt` plus `docs/screenshot.svg` from the scripted demo UPS.
+- `just install` builds a release binary, installs it root-owned at
+  `/usr/local/bin/nut`, installs the man pages, and installs completion as the
+  user. It calls `sudo`. Agents must use `/sase_sudo`.
+- `just install-smoke` installs into a temporary root, walks every visible
+  command's `--help`, runs a read-only invocation of every command group, and
+  verifies both shell completion adapters.
+- `just clean` removes Cargo build artifacts.
 - `just hook-shellcheck` runs ShellCheck on the golden `nut-upssched-cmd` when the tool is installed.
 - `just snap` reviews insta snapshots of rendered NUT files.
 
@@ -97,6 +107,10 @@ SASE exposes `check` as `just check`, with declared gate inputs and toolchain
 fingerprints. After every push, watch the CI and e2e runs for the exact pushed
 SHA through `/sase_monitor` before closing the phase.
 
+`release.yml` runs on `v*` tags. It builds a static `x86_64-unknown-linux-musl`
+binary, writes a SHA-256 checksum, and attaches both files to the GitHub
+Release. Cut `v0.1.0` only after athena adoption.
+
 Read-only athena preview uses an explicit host and an explicit config path:
 
 ```
@@ -111,6 +125,12 @@ files, intended operator and hook changes, and the required root preview. Root
 dry-run and apply on athena remain the adopt phase's responsibility. Recorded
 preview output lives in [athena preview](athena-preview.md).
 
-`just install-smoke` installs into a temporary root, checks every command help,
-and verifies both shell completion adapters. Bash and zsh are required; see
+`just install-smoke` is required in CI. Bash and zsh are required; see
 [completion](completion.md) for the protocol and provider extension points.
+
+## Related
+
+- [Getting started](getting-started.md)
+- [Architecture](architecture.md)
+- [CLI reference](reference/cli/index.md)
+

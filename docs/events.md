@@ -96,3 +96,10 @@ host's user cache and runs the same read-only command there. It never installs
 it as root or changes NUT configuration.
 
 Journal query semantics follow the [systemd journalctl manual](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html).
+
+## Related
+
+- [Outage timeline](outage-timeline.md)
+- [Guided recovery drills](drills.md)
+- [CLI reference](reference/cli/events.md)
+

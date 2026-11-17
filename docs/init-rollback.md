@@ -73,3 +73,10 @@ corrupt state, pending recovery, and applied-file drift.
 complete, private manifest and matching preimage blobs. Both checks require
 root because the state and backup trees are root-only. Run `nut doctor --list`
 for their generated catalog descriptions and fix commands.
+
+## Related
+
+- [Init and rollback](init.md)
+- [Init convergence](init-converge.md)
+- [Doctor checks](doctor-checks.md)
+

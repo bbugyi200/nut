@@ -1,0 +1,68 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-drill 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-drill \- Guide and record a physical outage drill
+.SH SYNOPSIS
+\fBnut drill\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-\-yes\fR] [\fB\-\-ups\fR] [\fB\-\-upsd\-address\fR] [\fB\-\-upsd\-port\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Guide and record a physical outage drill
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-\-yes\fR
+Refused. Drills need a person at the keyboard
+.TP
+\fB\-\-ups\fR \fI<UPS>\fR
+UPS name (defaults to the selected host configuration, or `cp1500`)
+.TP
+\fB\-\-upsd\-address\fR \fI<ADDRESS>\fR
+Loopback upsd address (defaults to 127.0.0.1)
+.TP
+\fB\-\-upsd\-port\fR \fI<PORT>\fR
+Loopback upsd port (defaults to 3493)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+nut\-drill\-blip(1)
+Test a 60\-second mains interruption without shutting down
+.TP
+nut\-drill\-ac\-loss(1)
+Test automatic power\-on after a true AC loss
+.TP
+nut\-drill\-cycle(1)
+Test UPS outlet cycling after a clean shutdown
+.TP
+nut\-drill\-outage(1)
+Test shutdown and recovery during a sustained outage
+.TP
+nut\-drill\-report(1)
+Record observations after a drill and review the prior boot journal

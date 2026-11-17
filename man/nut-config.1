@@ -1,0 +1,56 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-config 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-config \- Inspect, scaffold, render, or diff host settings
+.SH SYNOPSIS
+\fBnut config\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Inspect, scaffold, render, or diff host settings
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+nut\-config\-path(1)
+Print the selected host configuration path and why it was chosen
+.TP
+nut\-config\-show(1)
+Parse and display the selected host configuration
+.TP
+nut\-config\-new(1)
+Scaffold a commented host config from live USB and DMI discovery
+.TP
+nut\-config\-render(1)
+Render NUT files and the event hook with secret placeholders
+.TP
+nut\-config\-diff(1)
+Compare rendered files with live NUT configuration. Secrets are masked

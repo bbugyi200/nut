@@ -1,0 +1,55 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-status 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-status \- Show UPS status
+.SH SYNOPSIS
+\fBnut status\fR [\fB\-\-color\fR] [\fB\-\-watch\fR] [\fB\-\-all\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-\-ups\fR] [\fB\-\-upsd\-address\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-\-upsd\-port\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Show UPS status
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-watch\fR
+Continuously refresh the status view
+.TP
+\fB\-\-all\fR
+Include raw NUT variables
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-\-ups\fR \fI<UPS>\fR
+UPS name (defaults to the selected host configuration, or `primary`)
+.TP
+\fB\-\-upsd\-address\fR \fI<ADDRESS>\fR
+Loopback upsd address (defaults to host configuration, or 127.0.0.1)
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-\-upsd\-port\fR \fI<PORT>\fR
+Loopback upsd port (defaults to host configuration, or 3493)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

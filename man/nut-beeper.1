@@ -1,0 +1,59 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-beeper 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-beeper \- Show or change the UPS beeper
+.SH SYNOPSIS
+\fBnut beeper\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-\-ups\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-\-upsd\-address\fR] [\fB\-\-upsd\-port\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Show or change the UPS beeper
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-\-ups\fR \fI<UPS>\fR
+UPS name (defaults to the selected host configuration, or `primary`)
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-\-upsd\-address\fR \fI<ADDRESS>\fR
+Loopback upsd address (defaults to host configuration, or 127.0.0.1)
+.TP
+\fB\-\-upsd\-port\fR \fI<PORT>\fR
+Loopback upsd port (defaults to host configuration, or 3493)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+nut\-beeper\-mute(1)
+Mute the beeper until the next UPS event
+.TP
+nut\-beeper\-enable(1)
+Sound the beeper while an alarm is present
+.TP
+nut\-beeper\-disable(1)
+Silence the beeper entirely

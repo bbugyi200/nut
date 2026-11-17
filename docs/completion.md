@@ -82,5 +82,12 @@ Protocol and shell adapters are adapted from the MIT-licensed
 
 `cargo test --locked --test completion` requires bash and zsh. CI runs it along
 with `just install-smoke`, which copies a binary into a temporary root, traverses
-every visible command's help, then installs, probes, and removes both adapters
-under a sandboxed HOME.
+every visible command's help, runs a read-only invocation of every command group,
+then installs, probes, and removes both adapters under a sandboxed HOME.
+
+## Related
+
+- [Getting started](getting-started.md)
+- [CLI reference](reference/cli/completion.md)
+- [Development](development.md)
+

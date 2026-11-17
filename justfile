@@ -86,18 +86,37 @@ hook-shellcheck: (_banner "35" "HOOK")
         echo "shellcheck not installed; skipping hook check"; \
     fi
 
-# Build, install into a temporary root, smoke all help, and exercise completion.
+# Build, install into a temporary root, smoke every command, and exercise completion.
 install-smoke:
     cargo build --locked --bin nut
     bash scripts/install_smoke.sh "${CARGO_TARGET_DIR:-target}/debug/nut"
+
+# Install a root-owned binary and man pages, then user completion.
+# Agents must use /sase_sudo instead of invoking sudo from this recipe.
+install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --locked --release --bin nut
+    bin="${CARGO_TARGET_DIR:-target}/release/nut"
+    sudo install -o root -g root -m 0755 "$bin" /usr/local/bin/nut
+    sudo install -d -o root -g root -m 0755 /usr/local/share/man/man1
+    sudo install -o root -g root -m 0644 man/*.1 /usr/local/share/man/man1/
+    nut completion install
 
 # Review insta snapshots.
 snap:
     cargo insta review
 
-# Generate docs/doctor-checks.md from the doctor registry.
+# Generate CLI reference, man pages, doctor catalog, and the demo screenshot.
 docs-gen:
-    cargo test --locked --offline --lib -- doctor::tests::write_doctor_checks_markdown --exact --ignored --nocapture
+    NUT_UPDATE_GOLDENS=1 cargo test --locked --test docs_gen -- --exact generated_docs_match --nocapture
+
+# Capture the demo status screen into docs/screenshot.txt and docs/screenshot.svg.
+screenshot: docs-gen
+
+# Remove Cargo build artifacts.
+clean:
+    cargo clean
 
 # Validate the dummy-ups e2e fixtures and harness without starting NUT.
 e2e-lint: (_banner "36" "E2E-LINT")

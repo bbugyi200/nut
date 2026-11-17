@@ -1,0 +1,12 @@
+nut status · demo
+Host            demo
+State           On line, charging
+Battery charge  100%  ████████████
+Runtime         25m 50s estimated
+Load            28%  ███▍
+Input voltage   122.0 V
+Battery test    No test initiated
+
+If power fails now, the host shutdown timer is 3m on battery.
+The UPS estimates 25m 50s at the current load.
+Estimated runtime after that timer: 22m 50s.

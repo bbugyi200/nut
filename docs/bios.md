@@ -49,3 +49,10 @@ The same checks are reused by `nut doctor`:
 - advisory `kernel.panic` and watchdog hints
 
 See [adding a board](adding-a-board.md) to extend the catalog.
+
+## Related
+
+- [Guided recovery drills](drills.md)
+- [Doctor checks](doctor-checks.md)
+- [CLI reference](reference/cli/bios.md)
+

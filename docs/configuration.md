@@ -94,3 +94,11 @@ Embedded UPS profiles live in `profiles/ups/`. Host-local overrides may be dropp
 The CyberPower CP1500PFCLCD profile pins delays 60/0, USB ids `0764:0501` and
 `0764:0601`, 1000 W, and the RB1290X2 / RB1280X2B cartridges. Athena's unit is 0601,
 so its host file sets `match.productid`.
+
+## Related
+
+- [Getting started](getting-started.md)
+- [Outage timeline](outage-timeline.md)
+- [Init and rollback](init.md)
+- [CLI reference](reference/cli/config.md)
+

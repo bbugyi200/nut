@@ -107,3 +107,10 @@ Offline tests use `FakeHost` operation traces, injected failures and reconstruct
 process state. They exercise package guards, no-upgrade binding, additive groups,
 file modes and drift, checkpoint interruption, nofail validation, selected-device
 repair, dummy skips and retirement. Run the complete offline gate with `just check`.
+
+## Related
+
+- [Init and rollback](init.md)
+- [Init convergence](init-converge.md)
+- [Init rollback](init-rollback.md)
+

@@ -56,3 +56,10 @@ machine exposes that interface.
 
 Firmware-attributes apply is fixture-tested against a fake sysfs tree until a
 real Dell/Lenovo/HP board uses it.
+
+## Related
+
+- [BIOS guidance](bios.md)
+- [Host configuration](configuration.md)
+- [Architecture](architecture.md)
+

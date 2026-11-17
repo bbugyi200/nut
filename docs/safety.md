@@ -53,3 +53,10 @@ Init apply on a real host requires `/sase_sudo` and `--expect-plan`. Rollback
 retains installed distribution packages; recover files with
 `sudo nut rollback --yes STAMP` and inspect drift with
 `sudo nut doctor state.drift`. See [init and rollback](init.md).
+
+## Related
+
+- [Architecture](architecture.md)
+- [Getting started](getting-started.md)
+- [Guided recovery drills](drills.md)
+

@@ -1,0 +1,53 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-bios 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-bios \- Guide and verify BIOS recovery settings
+.SH SYNOPSIS
+\fBnut bios\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Guide and verify BIOS recovery settings
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+nut\-bios\-guide(1)
+Print a numbered keyboard walkthrough for this board
+.TP
+nut\-bios\-setup(1)
+Reboot into firmware setup after a hostname interlock
+.TP
+nut\-bios\-attest(1)
+Record a BIOS\-version\-pinned attestation receipt
+.TP
+nut\-bios\-profile(1)
+List, show, or scaffold a board profile

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Finish the docs front door: a committed `just demo` screenshot, quickstart,
+  the six safety rules, the command table, and install-on-a-new-machine
+  guidance. Add getting-started, design, architecture (Figure 1), and outage
+  timeline pages, and cross-link the rest of the docs.
+- Generate `docs/reference/cli/*.md` and `man/*.1` through `just docs-gen`
+  (`NUT_UPDATE_GOLDENS=1`) with drift tests. Extend `just install-smoke` to a
+  read-only invocation of every command group plus man-page presence, and add
+  `just install` for the root-owned binary, man pages, and user completion.
+- Add `release.yml` on `v*` tags: a static `x86_64-unknown-linux-musl` binary
+  with a SHA-256 checksum attached to the GitHub Release. Cut `v0.1.0` only
+  after athena adoption.
+
 - Authenticate UPS actions on the least-privilege operator credential:
   `nut beeper [mute|enable|disable]` shows or changes the beeper and confirms
   the new `ups.beeper.status`, `nut battery test [--stop]` runs or aborts a

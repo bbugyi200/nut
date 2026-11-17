@@ -285,3 +285,10 @@ Needs root: no
 Shows the latest sustained outage recovery result and its BIOS, battery, NUT, and configuration freshness.
 
 Needs root: no
+
+## Related
+
+- [Getting started](getting-started.md)
+- [Safety contract](safety.md)
+- [Guided recovery drills](drills.md)
+- [CLI reference](reference/cli/doctor.md)

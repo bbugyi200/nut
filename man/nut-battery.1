@@ -1,0 +1,53 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-battery 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-battery \- Show battery charge and runtime, or run a guarded self\-test
+.SH SYNOPSIS
+\fBnut battery\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-\-ups\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-\-upsd\-address\fR] [\fB\-\-upsd\-port\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Show battery charge and runtime, or run a guarded self\-test
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-\-ups\fR \fI<UPS>\fR
+UPS name (defaults to the selected host configuration, or `primary`)
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-\-upsd\-address\fR \fI<ADDRESS>\fR
+Loopback upsd address (defaults to host configuration, or 127.0.0.1)
+.TP
+\fB\-\-upsd\-port\fR \fI<PORT>\fR
+Loopback upsd port (defaults to host configuration, or 3493)
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+nut\-battery\-test(1)
+Run a guarded battery self\-test on the operator credential

@@ -1,0 +1,55 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-init 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-init \- Plan or apply NUT configuration
+.SH SYNOPSIS
+\fBnut init\fR [\fB\-\-color\fR] [\fB\-n\fR|\fB\-\-dry\-run\fR] [\fB\-\-ascii\fR] [\fB\-\-rotate\-secrets\fR] [\fB\-\-expect\-plan\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-y\fR|\fB\-\-yes\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-\-ups\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Plan or apply NUT configuration
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-n\fR, \fB\-\-dry\-run\fR
+Show the plan without applying changes
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-\-rotate\-secrets\fR
+Rotate both managed credentials instead of adopting existing ones
+.TP
+\fB\-\-expect\-plan\fR \fI<HASH>\fR
+Apply only when the recomputed plan matches this hash
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-y\fR, \fB\-\-yes\fR
+Apply the reviewed plan without an interactive prompt
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-\-ups\fR \fI<UPS>\fR
+UPS name (defaults to the selected host configuration)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

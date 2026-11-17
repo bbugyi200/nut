@@ -1,0 +1,52 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-rollback 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-rollback \- List or restore a configuration backup
+.SH SYNOPSIS
+\fBnut rollback\fR [\fB\-\-color\fR] [\fB\-l\fR|\fB\-\-list\fR] [\fB\-\-ascii\fR] [\fB\-n\fR|\fB\-\-dry\-run\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-y\fR|\fB\-\-yes\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISTAMP\fR] 
+.SH DESCRIPTION
+List or restore a configuration backup
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-l\fR, \fB\-\-list\fR
+List available backups
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-n\fR, \fB\-\-dry\-run\fR
+Show the restore plan without changing anything
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-y\fR, \fB\-\-yes\fR
+Restore without an interactive prompt
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fISTAMP\fR]
+Backup stamp to restore (defaults to the newest complete backup)

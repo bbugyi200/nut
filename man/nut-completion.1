@@ -1,0 +1,54 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH nut-completion 1  "nut-cli 0.1.0" nut
+.SH NAME
+nut\-completion \- Install, inspect, or remove shell completion
+.SH SYNOPSIS
+\fBnut completion\fR [\fB\-\-color\fR] [\fB\-\-ascii\fR] [\fB\-j\fR|\fB\-\-json\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-c\fR|\fB\-\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Install, inspect, or remove shell completion
+.SH OPTIONS
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+Color output policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-ascii\fR
+Use ASCII symbols and bars
+.TP
+\fB\-j\fR, \fB\-\-json\fR
+Emit machine\-readable JSON where supported
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Include additional diagnostic detail
+.TP
+\fB\-c\fR, \fB\-\-config\fR \fI<PATH>\fR
+Read host settings from this file
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+nut\-completion\-install(1)
+Install an adapter and verify registration in an isolated real shell
+.TP
+nut\-completion\-status(1)
+Inspect installed adapters and probe their registration
+.TP
+nut\-completion\-uninstall(1)
+Remove adapters whose bytes still match the recorded manifest
+.TP
+nut\-completion\-zsh(1)
+.TP
+nut\-completion\-bash(1)
