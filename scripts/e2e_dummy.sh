@@ -588,9 +588,9 @@ PY
 
 # The operator allowlist is proved three ways: the rendered upsd.users stanza
 # carries exactly the beeper/test commands, the live operator credential is
-# refused power commands, and an allowed command reaches the driver. Dummy-ups
-# in Dummy Mode implements no instant commands, so "reaches the driver" means
-# upsd answers CMD-NOT-SUPPORTED rather than ACCESS-DENIED.
+# refused power commands, and an allowed command gets the unsupported reply.
+# Dummy Mode implements no instant commands and may check support before ACLs;
+# in that case the stanza assertion provides the authorization proof.
 assert_operator_acl() {
     python3 - <<'PY'
 from pathlib import Path
@@ -623,33 +623,23 @@ PY
 
 # Run one instant command as the operator and report the lowercased refusal.
 operator_probe() {
-    local secret=$1
-    shift
-    local out
-    if out=$(upscmd -u nut-operator -p "$secret" dummy "$@" 2>&1); then
-        fail "upscmd $* unexpectedly succeeded: $out"
-    fi
-    printf '%s' "$out" | tr '[:upper:]' '[:lower:]'
+    python3 "$ROOT/scripts/e2e_operator_probe.py" "$1"
 }
 
 run_actions_proofs() {
     log "operator allows beeper/test, refuses power commands"
-    command -v upscmd >/dev/null || fail "upscmd is missing; nut-client did not install"
     assert_operator_acl
-    local secret lowered
-    secret=$(cat /etc/nut-cli/operator.secret)
-    [[ -n $secret ]] || fail "operator secret is empty"
-    # Allowed command reaches the driver: auth and the ACL pass, then the
-    # driverless dummy-ups refuses the command itself.
-    lowered=$(operator_probe "$secret" beeper.mute)
+    local lowered cmd out
+    # Dummy Mode may reject unsupported commands before checking the ACL,
+    # so the exact rendered stanza remains the authorization proof.
+    lowered=$(operator_probe beeper.mute)
     [[ $lowered == *support* ]] || fail "beeper.mute refusal does not name support: $lowered"
     [[ $lowered != *denied* ]] || fail "beeper.mute was denied by the ACL: $lowered"
-    log "operator reached the driver: $lowered"
-    # Power commands never reach the driver: the ACL refuses them first. Where
-    # dummy-ups reports the command unsupported first, the stanza assertion
-    # above is the ACL proof and the probe only records the refusal.
+    log "beeper probe refused as unsupported: $lowered"
+    # Either ACL or command-support checks refuse these power commands.
+    # The stanza assertion covers the latter case.
     for cmd in load.off shutdown.return; do
-        lowered=$(operator_probe "$secret" "$cmd")
+        lowered=$(operator_probe "$cmd")
         if [[ $lowered == *denied* ]]; then
             log "operator refused $cmd: access denied"
         elif [[ $lowered == *support* ]]; then
@@ -658,7 +648,6 @@ run_actions_proofs() {
             fail "unexpected $cmd refusal: $lowered"
         fi
     done
-    unset secret
     # The nut CLI speaks the same protocol: bare beeper reads, verbs reach the
     # driver refusal, notify test submits mail, and the test needs a terminal.
     "$NUT_BIN" --config "$CONFIG" beeper | grep -qi "not reported" \

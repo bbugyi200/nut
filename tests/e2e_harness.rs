@@ -92,3 +92,76 @@ fn e2e_stubs_are_posix_shell() {
         assert!(text.contains("Disposable CI stub"));
     }
 }
+
+#[test]
+fn operator_probe_keeps_credentials_in_files_and_refuses_real_drivers() {
+    use nut_cli::fake_upsd::{FakeUpsdFixture, FakeUser, serve_client};
+    use std::collections::BTreeMap;
+    use std::net::TcpListener;
+    use std::thread;
+
+    let secret_dir = tempfile::tempdir().unwrap();
+    let secret_path = secret_dir.path().join("operator.secret");
+    let secret = "probe secret with \"quotes\" and \\slashes";
+    std::fs::write(&secret_path, format!("{secret}\n")).unwrap();
+    for (driver, command, commands, expected) in [
+        (
+            "dummy-ups",
+            "beeper.mute",
+            vec![],
+            Some("err cmd-not-supported"),
+        ),
+        (
+            "dummy-ups",
+            "load.off",
+            vec!["load.off"],
+            Some("err access-denied"),
+        ),
+        (
+            "dummy-ups",
+            "shutdown.return",
+            vec!["shutdown.return"],
+            Some("err access-denied"),
+        ),
+        ("usbhid-ups", "beeper.mute", vec![], None),
+        ("dummy-ups", "beeper.mute", vec!["beeper.mute"], None),
+    ] {
+        let mut fixture = FakeUpsdFixture {
+            ups_name: "dummy".into(),
+            description: "Disposable probe test".into(),
+            variables: BTreeMap::from([("driver.name".into(), driver.into())]),
+            commands: commands.into_iter().map(String::from).collect(),
+            users: BTreeMap::from([(
+                "nut-operator".into(),
+                FakeUser {
+                    password: secret.into(),
+                    instcmds: vec!["beeper.mute".into()],
+                },
+            )]),
+            ..Default::default()
+        };
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            serve_client(stream, &mut fixture).unwrap();
+        });
+        let output = Command::new("python3")
+            .args(["-B", "-c", "import sys; from pathlib import Path; sys.path.insert(0, 'scripts'); from e2e_operator_probe import probe; print(probe(sys.argv[1], Path(sys.argv[2]), int(sys.argv[3])))"])
+            .arg(command)
+            .arg(&secret_path)
+            .arg(port.to_string())
+            .current_dir(repo_root())
+            .output()
+            .unwrap();
+        server.join().unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(!stdout.contains(secret));
+        assert!(!stderr.contains(secret));
+        assert_eq!(output.status.success(), expected.is_some(), "{stderr}");
+        if let Some(expected) = expected {
+            assert_eq!(stdout.trim(), expected);
+        }
+    }
+}

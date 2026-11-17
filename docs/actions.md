@@ -36,6 +36,8 @@ reports `SUCCESS`, exactly like `upscmd -w`. A submission timeout means
 "outcome unknown": the command may still run, so it is never retried
 automatically — check `nut battery --all` and decide. Logout is best-effort;
 closing the connection already discards the server-side session.
+Lost or malformed acknowledgements and lost tracking replies have the same
+unknown outcome; an explicit server refusal remains a failure.
 
 ## Beeper
 
@@ -54,6 +56,9 @@ spinner until the value leaves its in-progress state. Ctrl-C sends
 `test.battery.stop` before giving up; `--stop` aborts a running test without
 asking. A result that never settles, or a driver that never reports one, is
 an operational failure with the command that shows the live state.
+An unchanged pre-test result cannot prove the new test finished: the CLI
+requires a changed result or an observed in-progress transition, even if
+the new test ends with the same result as the previous one.
 
 ## Notify
 
@@ -74,7 +79,10 @@ submission-timeout path and scripted `ups.test.result` progressions. On real
 NUT 2.8.1 with `dummy-ups` (which implements no instant commands), the
 disposable e2e job proves three things: the rendered stanza carries exactly
 the five allowed commands, the live operator credential is refused `load.off`
-and `shutdown.return`, and an allowed beeper command passes authentication
-and the ACL before the driver reports it unsupported. It also proves
+and `shutdown.return`, and a beeper probe receives the unsupported-command
+response. The probe reads the password from its file and verifies
+`driver.name = dummy-ups` before sending any instant command. Because
+dummy-ups may reject unsupported commands before checking authorization,
+the exact rendered stanza provides the ACL proof in that case. It also proves
 `nut beeper` degrades gracefully, `nut battery test` refuses to run without a
 terminal, and `nut notify test` delivers mail through the stub.

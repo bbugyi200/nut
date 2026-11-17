@@ -46,8 +46,7 @@ const TRACKING_BUDGET: Duration = Duration::from_secs(10);
 const TRACKING_INTERVAL: Duration = Duration::from_millis(200);
 const TEST_RESULT_BUDGET: Duration = Duration::from_secs(120);
 const TEST_RESULT_INTERVAL: Duration = Duration::from_secs(2);
-/// A result observed sooner than this after submission may predate the test,
-/// so the poll keeps watching for a change.
+/// Give a driver this long to publish a missing result variable.
 const MIN_RESULT_OBSERVE: Duration = Duration::from_secs(10);
 const HOOK_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -178,12 +177,19 @@ impl AuthedClient {
     }
 
     fn submit(&mut self, command: &str) -> Result<String, NutError> {
-        debug_assert!(ALLOWED_INSTCMDS.contains(&command));
-        match self.client.instcmd(command).map_err(map_command_error)? {
+        if !ALLOWED_INSTCMDS.contains(&command) {
+            return Err(NutError::operational(
+                "refusing a command outside the operator allowlist",
+            ));
+        }
+        match self.client.instcmd(command).map_err(|error| match error {
+            UpsdError::Server { .. } => map_command_error(error),
+            // A partial write, timeout, EOF, or malformed acknowledgement
+            // cannot establish whether the driver received the command.
+            _ => unknown_outcome(command),
+        })? {
             Some(id) => Ok(id),
-            None => Err(NutError::operational(
-                "upsd answered without a tracking id after SET TRACKING ON",
-            )),
+            None => Err(unknown_outcome(command)),
         }
     }
 
@@ -196,10 +202,11 @@ impl AuthedClient {
     ) -> Result<TrackEnd, NutError> {
         let started = Instant::now();
         loop {
-            match self.client.get_tracking(id).map_err(map_upsd_error)? {
-                TrackingState::Success => return Ok(TrackEnd::Completed),
-                TrackingState::Failed(reason) => return Ok(TrackEnd::Rejected(reason)),
-                TrackingState::Pending => {}
+            match self.client.get_tracking(id) {
+                Ok(TrackingState::Success) => return Ok(TrackEnd::Completed),
+                Ok(TrackingState::Failed(reason)) => return Ok(TrackEnd::Rejected(reason)),
+                Ok(TrackingState::Pending) => {}
+                Err(_) => return Ok(TrackEnd::Unknown),
             }
             if interrupt.load(Ordering::Relaxed) {
                 return Ok(TrackEnd::Interrupted);
@@ -214,6 +221,17 @@ impl AuthedClient {
     fn logout(mut self) {
         self.client.logout();
     }
+}
+
+fn unknown_outcome(command: &str) -> NutError {
+    NutError::operational(format!(
+        "the {command} outcome is unknown and was not retried"
+    ))
+    .with_hint(if command.starts_with("beeper.") {
+        "check the beeper with `nut beeper`"
+    } else {
+        "check the test state with `nut battery --all`; stop a running test with `nut battery test --stop`"
+    })
 }
 
 fn map_command_error(error: UpsdError) -> NutError {
@@ -718,9 +736,8 @@ enum TestPoll {
 }
 
 /// Poll `ups.test.result` until the test leaves its in-progress state. A
-/// value only counts as final when it no longer mentions progress and either
-/// differs from the pre-start reading or has been stable past `min_observe`,
-/// so a first read that predates the test cannot end the poll immediately.
+/// value only counts as final after a change from the pre-start reading or
+/// an observed in-progress state. Elapsed time cannot make an old result fresh.
 struct ResultPoll<'a, H: Host, W: Write> {
     session: &'a mut AuthedClient,
     host: &'a H,
@@ -744,6 +761,7 @@ fn poll_test_result<H: Host, W: Write>(poll: ResultPoll<'_, H, W>) -> Result<Tes
         stdout,
     } = poll;
     let mut last: Option<String> = None;
+    let mut saw_progress = false;
     let mut since_output = usize::MAX;
     loop {
         if interrupt.load(Ordering::Relaxed) {
@@ -787,8 +805,9 @@ fn poll_test_result<H: Host, W: Write>(poll: ResultPoll<'_, H, W>) -> Result<Tes
             }
         }
         if let Some(current) = last.as_deref() {
-            let settled = !current.to_ascii_lowercase().contains("progress")
-                && (Some(current) != previous || elapsed >= policy.min_observe);
+            let in_progress = current.to_ascii_lowercase().contains("progress");
+            saw_progress |= in_progress;
+            let settled = !in_progress && (Some(current) != previous || saw_progress);
             if settled {
                 return Ok(TestPoll::Done(current.to_owned()));
             }
@@ -1254,6 +1273,84 @@ mod tests {
         assert!(errors.contains("does not support"), "{errors}");
     }
 
+    #[test]
+    fn lost_action_replies_are_unknown_and_never_retried() {
+        use std::io::{BufRead, BufReader};
+        use std::net::Shutdown;
+
+        for fault in [
+            "submit-eof",
+            "submit-timeout",
+            "tracking-eof",
+            "untracked",
+            "malformed",
+        ] {
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut submissions = 0;
+                let mut lost_reply = false;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap() == 0 {
+                        break;
+                    }
+                    let line = line.trim_end();
+                    if line.starts_with("INSTCMD ") {
+                        submissions += 1;
+                    }
+                    if lost_reply {
+                        continue;
+                    }
+                    let reply = if line.starts_with("USERNAME ")
+                        || line.starts_with("PASSWORD ")
+                        || line == "SET TRACKING ON"
+                    {
+                        "OK"
+                    } else if line == "GET TRACKING" {
+                        "ON"
+                    } else if line == "GET VAR demo ups.beeper.status" {
+                        "VAR demo ups.beeper.status \"enabled\""
+                    } else if line.starts_with("INSTCMD ") && fault == "tracking-eof" {
+                        "OK TRACKING lost"
+                    } else {
+                        if fault == "submit-timeout" {
+                            thread::sleep(Duration::from_secs(3));
+                        } else if fault == "untracked" {
+                            writeln!(stream, "OK").unwrap();
+                        } else if fault == "malformed" {
+                            writeln!(stream, "OK TRACKING invalid id").unwrap();
+                        }
+                        stream.shutdown(Shutdown::Write).unwrap();
+                        lost_reply = true;
+                        continue;
+                    };
+                    writeln!(stream, "{reply}").unwrap();
+                }
+                submissions
+            });
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let code = crate::run_with_host(
+                action_args(port, &[], "beeper", &["mute"]),
+                &action_host(),
+                &mut stdout,
+                &mut stderr,
+            );
+            assert_eq!(server.join().unwrap(), 1, "{fault}");
+            assert_eq!(code, 1, "{fault}");
+            let error = String::from_utf8(stderr).unwrap();
+            assert!(error.contains("outcome is unknown"), "{fault}: {error}");
+            assert!(error.contains("not retried"), "{fault}: {error}");
+            assert!(!error.contains("action-secret"), "{fault}: {error}");
+        }
+    }
+
     fn tty_host(prompts: &[&str]) -> FakeHost {
         action_host()
             .with_stdin_tty(true)
@@ -1414,6 +1511,58 @@ mod tests {
             error.to_string().contains("unknown and was not retried"),
             "{error:?}"
         );
+    }
+
+    #[test]
+    fn battery_test_requires_fresh_result_evidence() {
+        for (previous, sequence, succeeds) in [
+            ("OK", vec![], false),
+            ("No test initiated", vec![], false),
+            ("OK", vec!["Test in progress".into(), "OK".into()], true),
+        ] {
+            let mut fixture = action_fixture();
+            fixture
+                .variables
+                .insert(TEST_RESULT_VAR.into(), previous.into());
+            fixture.test_result_sequence = sequence;
+            let (port, server) = serve(fixture);
+            let host = tty_host(&[]);
+            let (ui, connection) = test_connection(&host, port);
+            let options = OutputOptions {
+                config_path: Some(Path::new("/test/host.toml")),
+                json: true,
+                verbose: false,
+                color: crate::cli::ColorChoice::Never,
+                ascii: true,
+            };
+            let mut stdout = Vec::new();
+            let result = run_battery_test_with_policy(BatteryTest {
+                stop: false,
+                connection: &connection,
+                ui: &ui,
+                options,
+                host: &host,
+                stdout: &mut stdout,
+                policy: PollPolicy {
+                    result_budget: Duration::from_millis(500),
+                    ..tight_policy()
+                },
+                interrupt: &AtomicBool::new(false),
+            });
+            server.join().unwrap().unwrap();
+            if succeeds {
+                result.unwrap();
+                let document: serde_json::Value = serde_json::from_slice(&stdout).unwrap();
+                assert_eq!(document["test_result"], "OK");
+            } else {
+                let error = result.unwrap_err();
+                assert!(
+                    error.to_string().contains("may still be running"),
+                    "{error}"
+                );
+                assert!(stdout.is_empty());
+            }
+        }
     }
 
     /// Accept loop for tests that need a second connection after the first
