@@ -7,7 +7,6 @@ use std::time::{Duration, SystemTime};
 use crate::config::{ConfigError, HostConfig, ResolvedConfig, load_config, resolve};
 use crate::host::{FileMetadata, Host};
 use crate::profiles::{ProfileCatalog, UsbId, discover_usb_ids, load_catalog};
-use crate::upsd::{UpsdClient, list_ups};
 
 #[derive(Clone, Debug)]
 pub struct UsbMatch {
@@ -84,51 +83,23 @@ impl Snapshot {
             .map(str::to_owned)
             .or_else(|| resolved.as_ref().map(|resolved| resolved.ups_name.clone()))
             .or_else(|| {
-                list_ups(address, port, Duration::from_millis(200))
+                host.list_observed_ups(address, port)
                     .ok()
                     .and_then(|rows| rows.into_iter().next().map(|(name, _)| name))
             })
             .unwrap_or_else(|| "cp1500".to_owned());
 
-        let mut vars = BTreeMap::new();
-        let mut vars_error = None;
-        let mut cmds = Vec::new();
-        let mut cmds_error = None;
-        let mut clients = Vec::new();
-        let mut clients_error = None;
-        let mut nut_version = None;
-        let mut greeting = None;
-        match UpsdClient::connect(address, port, &ups_name) {
-            Ok(mut client) => {
-                match client.list_vars() {
-                    Ok(values) => vars = values,
-                    Err(error) => vars_error = Some(error.to_string()),
-                }
-                let ver = client.version().ok();
-                greeting = client
-                    .greeting()
-                    .map(ToOwned::to_owned)
-                    .or_else(|| ver.clone());
-                nut_version = greeting
-                    .as_deref()
-                    .and_then(parse_nut_version_text)
-                    .or_else(|| ver.as_deref().and_then(parse_nut_version_text));
-                match client.list_cmds() {
-                    Ok(values) => cmds = values,
-                    Err(error) => cmds_error = Some(error.to_string()),
-                }
-                match client.list_clients() {
-                    Ok(values) => clients = values,
-                    Err(error) => clients_error = Some(error.to_string()),
-                }
-            }
-            Err(error) => {
-                let message = error.to_string();
-                vars_error = Some(message.clone());
-                cmds_error = Some(message.clone());
-                clients_error = Some(message);
-            }
-        }
+        let observation = host.observe_ups(address, port, &ups_name);
+        let vars = observation.vars;
+        let vars_error = observation.vars_error;
+        let cmds = observation.cmds;
+        let cmds_error = observation.cmds_error;
+        let clients = observation.clients;
+        let clients_error = observation.clients_error;
+        let greeting = observation.greeting;
+        let nut_version = observation
+            .nut_version
+            .or_else(|| greeting.as_deref().and_then(parse_nut_version_text));
 
         let (usb, usb_error) = match discover_usb_ids(host) {
             Ok(found) => {

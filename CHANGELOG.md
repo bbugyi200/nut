@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extend `Host` with protected no-follow atomic replacement and removal, secure
+  directories, exclusive apply locking, deterministic entropy, bounded argv
+  execution with secret-safe errors and inherited-TTY spawning, and injectable
+  UPS observations reused by doctor. The test fake records effects, queues
+  command and UPS results, and injects operation failures without touching the
+  OS or port 3493.
 - Ship `nut doctor` with a 40-check registry, JSON, `--strict`/`--observe`/`--list`,
   positional ID and section filters, generated `docs/doctor-checks.md`, and a
   `POWEROFF_WAIT` warning against full-charge runtime plus 10 minutes.

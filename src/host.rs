@@ -6,7 +6,16 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+#[cfg(test)]
+mod fake;
+mod observe;
+mod process;
+mod protect;
 mod stream;
+
+#[cfg(test)]
+pub use fake::{FakeHost, HostEffect};
+pub use observe::UpsObservation;
 
 use thiserror::Error;
 
@@ -30,6 +39,40 @@ impl FileMetadata {
     pub fn executable(&self) -> bool {
         self.mode & 0o111 != 0
     }
+
+    pub fn file(uid: u32, gid: u32, mode: u32) -> Self {
+        Self {
+            uid,
+            gid,
+            mode,
+            is_file: true,
+            is_dir: false,
+        }
+    }
+
+    pub fn dir(uid: u32, gid: u32, mode: u32) -> Self {
+        Self {
+            uid,
+            gid,
+            mode,
+            is_file: false,
+            is_dir: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessRequest<'a> {
+    pub program: &'a OsStr,
+    pub args: &'a [OsString],
+    pub timeout: Duration,
+    pub secret: bool,
+    pub inherit_tty: bool,
+}
+
+/// Process-scoped exclusive apply lock. Dropping it releases the lock.
+pub trait ApplyLock {
+    fn path(&self) -> &Path;
 }
 
 #[derive(Debug, Error)]
@@ -58,6 +101,13 @@ impl HostError {
         Self {
             message: format!("cannot read {}: permission denied", path.display()),
             permission_denied: true,
+        }
+    }
+
+    pub fn unsafe_path(path: &Path, reason: &str) -> Self {
+        Self {
+            message: format!("unsafe path {}: {reason}", path.display()),
+            permission_denied: false,
         }
     }
 
@@ -112,6 +162,25 @@ pub trait Host {
     fn stderr_is_terminal(&self) -> bool;
     fn terminal_columns(&self) -> Option<usize>;
     fn prompt_line(&self, prompt: &str) -> Result<String, HostError>;
+    fn read_protected(&self, path: &Path) -> Result<Option<Vec<u8>>, HostError>;
+    fn replace_file_atomic(
+        &self,
+        path: &Path,
+        contents: &[u8],
+        metadata: &FileMetadata,
+    ) -> Result<(), HostError>;
+    fn remove_protected(&self, path: &Path) -> Result<(), HostError>;
+    fn set_metadata(&self, path: &Path, metadata: &FileMetadata) -> Result<(), HostError>;
+    fn create_secure_dir(&self, path: &Path, metadata: &FileMetadata) -> Result<(), HostError>;
+    fn lock_exclusive(&self, path: &Path) -> Result<Box<dyn ApplyLock>, HostError>;
+    fn random_bytes(&self, len: usize) -> Result<Vec<u8>, HostError>;
+    fn run_bounded(&self, request: &ProcessRequest<'_>) -> Result<ProcessOutput, HostError>;
+    fn observe_ups(&self, address: &str, port: u16, ups: &str) -> UpsObservation;
+    fn list_observed_ups(
+        &self,
+        address: &str,
+        port: u16,
+    ) -> Result<Vec<(String, String)>, HostError>;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -304,6 +373,57 @@ impl Host for SystemHost {
             .map_err(|error| HostError::from_io("cannot read prompt", error))?;
         Ok(line.trim_end_matches(['\n', '\r']).to_owned())
     }
+
+    fn read_protected(&self, path: &Path) -> Result<Option<Vec<u8>>, HostError> {
+        protect::read_protected(path)
+    }
+
+    fn replace_file_atomic(
+        &self,
+        path: &Path,
+        contents: &[u8],
+        metadata: &FileMetadata,
+    ) -> Result<(), HostError> {
+        protect::replace_file_atomic(path, contents, metadata)
+    }
+
+    fn remove_protected(&self, path: &Path) -> Result<(), HostError> {
+        protect::remove_protected(path)
+    }
+
+    fn set_metadata(&self, path: &Path, metadata: &FileMetadata) -> Result<(), HostError> {
+        protect::set_metadata(path, metadata)
+    }
+
+    fn create_secure_dir(&self, path: &Path, metadata: &FileMetadata) -> Result<(), HostError> {
+        protect::create_secure_dir(path, metadata)
+    }
+
+    fn lock_exclusive(&self, path: &Path) -> Result<Box<dyn ApplyLock>, HostError> {
+        protect::lock_exclusive(path)
+    }
+
+    fn random_bytes(&self, len: usize) -> Result<Vec<u8>, HostError> {
+        let mut bytes = vec![0u8; len];
+        protect::fill_random(&mut bytes)?;
+        Ok(bytes)
+    }
+
+    fn run_bounded(&self, request: &ProcessRequest<'_>) -> Result<ProcessOutput, HostError> {
+        process::run_bounded(request)
+    }
+
+    fn observe_ups(&self, address: &str, port: u16, ups: &str) -> UpsObservation {
+        observe::collect_native(address, port, ups)
+    }
+
+    fn list_observed_ups(
+        &self,
+        address: &str,
+        port: u16,
+    ) -> Result<Vec<(String, String)>, HostError> {
+        observe::list_native(address, port)
+    }
 }
 
 fn unix_metadata(meta: &fs::Metadata) -> FileMetadata {
@@ -340,301 +460,4 @@ fn parse_status_euid(bytes: Option<&[u8]>) -> Option<u32> {
         }
     }
     None
-}
-
-#[cfg(test)]
-use std::cell::RefCell;
-#[cfg(test)]
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
-
-#[cfg(test)]
-#[derive(Default)]
-pub struct FakeHost {
-    env: BTreeMap<String, OsString>,
-    files: RefCell<BTreeMap<PathBuf, Vec<u8>>>,
-    dirs: RefCell<BTreeSet<PathBuf>>,
-    unreadable: BTreeMap<PathBuf, ()>,
-    metadata: BTreeMap<PathBuf, FileMetadata>,
-    programs: BTreeMap<OsString, ProcessOutput>,
-    program_args: BTreeMap<(OsString, Vec<OsString>), ProcessOutput>,
-    now: Option<SystemTime>,
-    euid: Option<u32>,
-    hostname: Option<String>,
-    current_exe: Option<PathBuf>,
-    stdin_tty: bool,
-    stdout_tty: bool,
-    stderr_tty: bool,
-    prompts: RefCell<VecDeque<String>>,
-    slept: RefCell<Duration>,
-}
-
-#[cfg(test)]
-impl FakeHost {
-    pub fn with_env(mut self, name: impl Into<String>, value: impl Into<OsString>) -> Self {
-        self.env.insert(name.into(), value.into());
-        self
-    }
-
-    pub fn with_file(self, path: impl Into<PathBuf>, contents: impl Into<Vec<u8>>) -> Self {
-        let path = path.into();
-        insert_ancestors(&self.dirs, &path);
-        self.files.borrow_mut().insert(path, contents.into());
-        self
-    }
-
-    pub fn with_dir(self, path: impl Into<PathBuf>) -> Self {
-        self.dirs.borrow_mut().insert(path.into());
-        self
-    }
-
-    pub fn with_unreadable(mut self, path: impl Into<PathBuf>) -> Self {
-        self.unreadable.insert(path.into(), ());
-        self
-    }
-
-    pub fn with_metadata(mut self, path: impl Into<PathBuf>, metadata: FileMetadata) -> Self {
-        self.metadata.insert(path.into(), metadata);
-        self
-    }
-
-    pub fn with_current_exe(mut self, path: impl Into<PathBuf>) -> Self {
-        self.current_exe = Some(path.into());
-        self
-    }
-
-    pub fn slept(&self) -> Duration {
-        *self.slept.borrow()
-    }
-
-    pub fn with_program(mut self, program: impl Into<OsString>, output: ProcessOutput) -> Self {
-        self.programs.insert(program.into(), output);
-        self
-    }
-
-    pub fn with_program_args(
-        mut self,
-        program: impl Into<OsString>,
-        args: impl IntoIterator<Item = impl Into<OsString>>,
-        output: ProcessOutput,
-    ) -> Self {
-        let args = args.into_iter().map(Into::into).collect();
-        self.program_args.insert((program.into(), args), output);
-        self
-    }
-
-    pub fn at(mut self, now: SystemTime) -> Self {
-        self.now = Some(now);
-        self
-    }
-
-    pub fn with_euid(mut self, euid: u32) -> Self {
-        self.euid = Some(euid);
-        self
-    }
-
-    pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
-        self.hostname = Some(hostname.into());
-        self
-    }
-
-    pub fn with_tty(mut self, stdout: bool, stderr: bool) -> Self {
-        self.stdout_tty = stdout;
-        self.stderr_tty = stderr;
-        self
-    }
-
-    pub fn with_stdin_tty(mut self, stdin: bool) -> Self {
-        self.stdin_tty = stdin;
-        self
-    }
-
-    pub fn with_prompt_lines(self, lines: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.prompts
-            .borrow_mut()
-            .extend(lines.into_iter().map(Into::into));
-        self
-    }
-}
-
-#[cfg(test)]
-impl Host for FakeHost {
-    fn env(&self, key: &str) -> Option<OsString> {
-        self.env.get(key).cloned()
-    }
-
-    fn home_dir(&self) -> Option<PathBuf> {
-        self.env("HOME")
-            .or_else(|| self.env("USERPROFILE"))
-            .map(PathBuf::from)
-    }
-
-    fn read_file(&self, path: &Path) -> Result<Option<Vec<u8>>, HostError> {
-        if self.unreadable.contains_key(path) {
-            return Err(HostError::permission_denied(path));
-        }
-        Ok(self.files.borrow().get(path).cloned())
-    }
-
-    fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), HostError> {
-        insert_ancestors(&self.dirs, path);
-        self.files
-            .borrow_mut()
-            .insert(path.to_path_buf(), contents.to_vec());
-        Ok(())
-    }
-
-    fn create_dir_all(&self, path: &Path) -> Result<(), HostError> {
-        self.dirs.borrow_mut().insert(path.to_path_buf());
-        Ok(())
-    }
-
-    fn list_dir(&self, path: &Path) -> Result<Vec<String>, HostError> {
-        if self.unreadable.contains_key(path) {
-            return Err(HostError::permission_denied(path));
-        }
-        let files = self.files.borrow();
-        let dirs = self.dirs.borrow();
-        let mut names = BTreeSet::new();
-        for file in files.keys() {
-            if file.parent() == Some(path)
-                && let Some(name) = file.file_name()
-            {
-                names.insert(name.to_string_lossy().into_owned());
-            }
-        }
-        for dir in dirs.iter() {
-            if dir.parent() == Some(path)
-                && let Some(name) = dir.file_name()
-            {
-                names.insert(name.to_string_lossy().into_owned());
-            }
-        }
-        if names.is_empty()
-            && !dirs.contains(path)
-            && !files.keys().any(|file| file.starts_with(path))
-        {
-            return Err(HostError::message(format!(
-                "cannot list {}",
-                path.display()
-            )));
-        }
-        Ok(names.into_iter().collect())
-    }
-
-    fn path_exists(&self, path: &Path) -> Result<bool, HostError> {
-        Ok(self.files.borrow().contains_key(path)
-            || self.dirs.borrow().contains(path)
-            || self.metadata.contains_key(path)
-            || self
-                .files
-                .borrow()
-                .keys()
-                .any(|file| file.starts_with(path))
-            || self.dirs.borrow().iter().any(|dir| dir.starts_with(path)))
-    }
-
-    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, HostError> {
-        if self.unreadable.contains_key(path) {
-            return Err(HostError::permission_denied(path));
-        }
-        if let Some(metadata) = self.metadata.get(path) {
-            return Ok(Some(metadata.clone()));
-        }
-        if self.files.borrow().contains_key(path) {
-            return Ok(Some(FileMetadata {
-                uid: 0,
-                gid: 0,
-                mode: 0o644,
-                is_file: true,
-                is_dir: false,
-            }));
-        }
-        if self.dirs.borrow().contains(path) {
-            return Ok(Some(FileMetadata {
-                uid: 0,
-                gid: 0,
-                mode: 0o755,
-                is_file: false,
-                is_dir: true,
-            }));
-        }
-        Ok(None)
-    }
-
-    fn current_exe(&self) -> Result<PathBuf, HostError> {
-        self.current_exe
-            .clone()
-            .ok_or_else(|| HostError::message("cannot resolve current executable"))
-    }
-
-    fn sleep(&self, duration: Duration) {
-        let mut slept = self.slept.borrow_mut();
-        *slept = slept.saturating_add(duration);
-    }
-
-    fn run_program(&self, program: &OsStr, args: &[OsString]) -> Result<ProcessOutput, HostError> {
-        let exact = (program.to_os_string(), args.to_vec());
-        if let Some(output) = self.program_args.get(&exact) {
-            return Ok(output.clone());
-        }
-        Ok(self
-            .programs
-            .get(program)
-            .cloned()
-            .unwrap_or(ProcessOutput {
-                status: Some(127),
-                stdout: Vec::new(),
-                stderr: b"fake: command not configured".to_vec(),
-            }))
-    }
-
-    fn now(&self) -> SystemTime {
-        self.now
-            .unwrap_or(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000))
-    }
-
-    fn euid(&self) -> u32 {
-        self.euid.unwrap_or(1000)
-    }
-
-    fn hostname(&self) -> Result<String, HostError> {
-        self.hostname
-            .clone()
-            .ok_or_else(|| HostError::message("cannot determine hostname"))
-    }
-
-    fn stdin_is_terminal(&self) -> bool {
-        self.stdin_tty
-    }
-
-    fn stdout_is_terminal(&self) -> bool {
-        self.stdout_tty
-    }
-
-    fn stderr_is_terminal(&self) -> bool {
-        self.stderr_tty
-    }
-
-    fn terminal_columns(&self) -> Option<usize> {
-        None
-    }
-
-    fn prompt_line(&self, _prompt: &str) -> Result<String, HostError> {
-        self.prompts
-            .borrow_mut()
-            .pop_front()
-            .ok_or_else(|| HostError::message("no scripted prompt answer"))
-    }
-}
-
-#[cfg(test)]
-fn insert_ancestors(dirs: &RefCell<BTreeSet<PathBuf>>, path: &Path) {
-    let mut parent = path.parent();
-    while let Some(dir) = parent {
-        if dir.as_os_str().is_empty() || dir == Path::new("/") {
-            break;
-        }
-        dirs.borrow_mut().insert(dir.to_path_buf());
-        parent = dir.parent();
-    }
 }

@@ -29,6 +29,9 @@ CI runs the same format/lint and test recipes on pushes to `main` and pull reque
 Actions are pinned by commit, permissions are read-only, and superseded runs are
 canceled. Tests never require UPS hardware, NUT services, privileges, or network
 access. Dependency acquisition and CI setup may require network access.
+Host unit tests cover atomic replacement in a temporary directory under
+`target/` and prove fake timeouts, failure injection, and UPS scripting
+without contacting port 3493.
 
 `just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
 then runs the real CLI against it. `just fake-upsd` serves the fixture for manual

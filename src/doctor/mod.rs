@@ -623,17 +623,11 @@ mod tests {
 
     #[test]
     fn poweroff_wait_warns_against_live_runtime_from_fake_upsd() {
-        use crate::fake_upsd::{FakeUpsdFixture, serve_client};
+        use crate::host::UpsObservation;
         use std::collections::BTreeMap;
-        use std::net::TcpListener;
-        use std::thread;
 
-        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let fixture = FakeUpsdFixture {
-            ups_name: "cp1500".into(),
-            description: "CyberPower".into(),
-            variables: BTreeMap::from([
+        let host = fixture_host().with_ups_observation(UpsObservation {
+            vars: BTreeMap::from([
                 ("ups.status".into(), "OL".into()),
                 ("battery.charge".into(), "100".into()),
                 ("battery.runtime".into(), "1550".into()),
@@ -641,14 +635,12 @@ mod tests {
                 ("ups.delay.start".into(), "0".into()),
                 ("ups.test.result".into(), "No test initiated".into()),
             ]),
-            commands: vec!["shutdown.return".into()],
+            cmds: vec!["shutdown.return".into()],
             clients: vec!["127.0.0.1".into()],
-        };
-        let server = thread::spawn(move || {
-            let (stream, _) = listener.accept().unwrap();
-            let _ = serve_client(stream, &fixture);
+            greeting: Some("Network UPS Tools upsd 2.8.1".into()),
+            nut_version: Some("2.8.1".into()),
+            ..UpsObservation::default()
         });
-        let host = fixture_host();
         let (code, text, err) = execute(
             &[
                 "nut",
@@ -657,8 +649,6 @@ mod tests {
                 "--config",
                 "/config.toml",
                 "doctor",
-                "--upsd-port",
-                &port.to_string(),
                 "protect.poweroff-wait",
                 "hw.delays",
                 "hw.online",
@@ -666,7 +656,6 @@ mod tests {
             ],
             &host,
         );
-        let _ = server.join();
         assert_eq!(code, 0, "{err}\n{text}");
         let json: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(json["schema_version"], 1);
