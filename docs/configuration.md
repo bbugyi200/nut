@@ -69,7 +69,22 @@ password followed by a newline in `/etc/nut-cli/operator.secret`, owned by
 command arguments, environment variables, or logs. `nut doctor` checks these
 permissions and the operator's exact command allowlist. Rollback restores the
 previous file bytes and metadata while retaining installed distribution
-packages; see [init rollback](init-rollback.md).
+packages; see [init rollback](init-rollback.md) and the operator
+[init guide](init.md).
+
+`nut init --dry-run` never elevates. When `/etc/nut` is unreadable, the preview
+is partial: it names the unreadable files and required root preview, and it
+has no apply hash. An interactive terminal can run a read-only privileged
+preview through the installed `/usr/local/bin/nut`, then bind `sudo --
+/usr/local/bin/nut init --yes --expect-plan HASH --config ABS` to that hash.
+`--rotate-secrets` rotates both managed credentials once per transaction and
+is carried on that argv when selected. Optional `[operators] journal = true`
+adds `systemd-journal` membership and exposes all system logs; leave it false
+unless that access is required.
+
+The dummy UPS profile resolves without USB IDs. Point `port` at a local `.dev`
+file for isolated NUT 2.8.1 CI; dummy-ups never uses USB passthrough or
+repeater mode. See [development](development.md).
 
 Embedded UPS profiles live in `profiles/ups/`. Host-local overrides may be dropped in
 `/etc/nut-cli/ups/*.toml` and `/etc/nut-cli/boards/*.toml` without rebuilding nut.

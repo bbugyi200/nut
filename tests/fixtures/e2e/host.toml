@@ -1,0 +1,26 @@
+# Disposable dummy-ups host policy for isolated NUT 2.8.1 CI.
+# early_after exceeds the bounded e2e runtime so dummy OB never reaches FSD.
+schema = 1
+
+[host]
+name = "e2e"
+
+[ups.dummy]
+profile = "dummy"
+description = "CI dummy-ups"
+port = "/var/lib/nut/e2e.dev"
+
+[shutdown]
+notify_after = "5s"
+early_after = "30m"
+poweroff_wait = "3h"
+shutdown_budget = "2m"
+
+[notify]
+from = "root@example.invalid"
+to = "operator@example.invalid"
+commbad_after = "60s"
+
+[operators]
+users = []
+journal = false

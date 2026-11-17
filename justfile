@@ -99,8 +99,16 @@ snap:
 docs-gen:
     cargo test --locked --offline --lib -- doctor::tests::write_doctor_checks_markdown --exact --ignored --nocapture
 
+# Validate the dummy-ups e2e fixtures and harness without starting NUT.
+e2e-lint: (_banner "36" "E2E-LINT")
+    bash scripts/e2e_dummy.sh --lint
+
+# Isolated Ubuntu NUT 2.8.1 dummy-ups integration. Requires root and real NUT.
+e2e: (_banner "31" "E2E")
+    bash scripts/e2e_dummy.sh
+
 # Run the canonical offline formatting, lint, test, and hook shellcheck gate.
-check: fmt lint test hook-shellcheck
+check: fmt lint test hook-shellcheck e2e-lint
 
 # Run nut with the given arguments.
 run *args:

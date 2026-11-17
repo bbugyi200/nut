@@ -910,4 +910,93 @@ mod tests {
             "{poweroff}"
         );
     }
+
+    #[test]
+    fn dummy_ups_skips_usb_and_outlet_commands() {
+        let host = FakeHost::default()
+            .with_env("LANG", "C.UTF-8")
+            .with_env("TERM", "xterm")
+            .with_file(
+                "/e2e.toml",
+                include_bytes!("../../tests/fixtures/e2e/host.toml"),
+            );
+        let (code, text, err) = execute(
+            &[
+                "nut",
+                "--json",
+                "--config",
+                "/e2e.toml",
+                "doctor",
+                "hw.usb",
+                "hw.shutdown-return",
+            ],
+            &host,
+        );
+        assert_eq!(code, 0, "{err}\n{text}");
+        let json: Value = serde_json::from_str(&text).unwrap();
+        let checks = json["checks"].as_array().unwrap();
+        let usb = checks.iter().find(|check| check["id"] == "hw.usb").unwrap();
+        assert_eq!(usb["status"], "skipped", "{usb}");
+        assert!(
+            usb["evidence"]
+                .as_str()
+                .unwrap()
+                .contains("USB checks are not applicable for dummy-ups"),
+            "{usb}"
+        );
+        let outlet = checks
+            .iter()
+            .find(|check| check["id"] == "hw.shutdown-return")
+            .unwrap();
+        assert_eq!(outlet["status"], "skipped", "{outlet}");
+        assert!(
+            outlet["evidence"]
+                .as_str()
+                .unwrap()
+                .contains("dummy-ups does not advertise instant commands"),
+            "{outlet}"
+        );
+    }
+
+    #[test]
+    fn svc_enabled_accepts_static_and_indirect_units() {
+        let host = fixture_host()
+            .with_program_args(
+                "systemctl",
+                ["is-enabled", "nut-driver@cp1500.service"],
+                ProcessOutput {
+                    status: Some(0),
+                    stdout: b"static\n".to_vec(),
+                    stderr: Vec::new(),
+                },
+            )
+            .with_program_args(
+                "systemctl",
+                ["is-enabled", "nut-server.service"],
+                ProcessOutput {
+                    status: Some(0),
+                    stdout: b"indirect\n".to_vec(),
+                    stderr: Vec::new(),
+                },
+            );
+        let (code, text, err) = execute(
+            &[
+                "nut",
+                "--json",
+                "--config",
+                "/config.toml",
+                "doctor",
+                "svc.enabled",
+            ],
+            &host,
+        );
+        assert_eq!(code, 0, "{err}\n{text}");
+        let json: Value = serde_json::from_str(&text).unwrap();
+        let checks = json["checks"].as_array().unwrap();
+        let enabled = checks
+            .iter()
+            .find(|check| check["id"] == "svc.enabled")
+            .unwrap();
+        assert_eq!(enabled["status"], "pass", "{enabled}");
+    }
 }

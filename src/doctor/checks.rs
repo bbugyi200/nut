@@ -355,6 +355,9 @@ fn hw_delays(entry: &CatalogEntry, snapshot: &Snapshot) -> Check {
 }
 
 fn hw_shutdown_return(entry: &CatalogEntry, snapshot: &Snapshot) -> Check {
+    if snapshot.dummy_ups {
+        return skipped(entry, "dummy-ups does not advertise instant commands", None);
+    }
     if let Some(error) = &snapshot.cmds_error {
         return fail(entry, error.clone(), "check nut-server; then: nut doctor");
     }

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Prove init, dummy-ups events, and rollback on real NUT 2.8.1: isolated
+  Ubuntu 24.04 `e2e.yml` installs the root-owned `/usr/local/bin/nut`, runs
+  hash-bound `init --yes --expect-plan` plus the documented root `init --yes`
+  path, asserts dummy USB and `shutdown.return` skips, a no-op second init,
+  dummy OB/OL status and events, and rollback that restores files while
+  retaining packages. `just check` stays offline via `just e2e-lint` and
+  fixture tests. Skip `hw.shutdown-return` for dummy-ups, treat
+  `static`/`indirect` systemd enablement as enabled, and document privileged
+  previews, secret rotation, recovery, and the read-only athena dry-run
+  preview. See `docs/init.md` and `docs/development.md`.
 - Bind reviewed plans to privileged CLI execution: `nut init` with
   `-n/--dry-run`, `--rotate-secrets`, `--expect-plan HASH`, and `-y/--yes` plus
   `nut rollback [STAMP]` with `-l/--list`, `-n/--dry-run`, and `-y/--yes`.

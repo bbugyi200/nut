@@ -1,0 +1,15 @@
+device.mfr: NUT
+device.model: dummy-ups
+device.type: ups
+ups.mfr: NUT
+ups.model: dummy-ups
+ups.status: OL CHRG
+ups.delay.shutdown: 60
+ups.delay.start: 0
+ups.load: 20
+ups.test.result: OK
+battery.charge: 100
+battery.runtime: 7200
+battery.voltage: 24.0
+input.voltage: 120.0
+output.voltage: 120.0

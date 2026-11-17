@@ -36,7 +36,19 @@ These rules apply to every command and implementation phase.
   requires fresh safe-online UPS evidence before changing service activity. See
   [init rollback](init-rollback.md).
 5. **Keep recipes offline.** Build and test recipes must never touch a real UPS,
-   power anything off, or implicitly contact another host. Any future recipe that
-   reaches a host must require that host as an explicit argument.
+   power anything off, or implicitly contact another host. Any recipe that
+   reaches a host must require that host as an explicit argument. `just check`
+   stays offline. Real NUT integration runs only in the disposable
+   `just e2e` job, which installs runner-only shutdown and sendmail stubs
+   before starting NUT and asserts the shutdown helper was never invoked.
 6. **Claims need evidence.** Protection claims require live readings or recorded
    attestations. Unknown state must be stated plainly, along with how to verify it.
+   Isolated dummy-ups CI records init-to-init empty plans, dummy OB/OL event
+   recovery, rollback round trips, and the read-only athena `init --dry-run`
+   preview. Dummy-ups skips USB matching and `shutdown.return`; it does not
+   disable physical-device checks for real UPS profiles.
+
+Init apply on a real host requires `/sase_sudo` and `--expect-plan`. Rollback
+retains installed distribution packages; recover files with
+`sudo nut rollback --yes STAMP` and inspect drift with
+`sudo nut doctor state.drift`. See [init and rollback](init.md).

@@ -303,7 +303,12 @@ pub fn unit_state<H: Host>(host: &H, unit: &str) -> UnitState {
         )
         .ok()
         .map(|output| {
-            output.status == Some(0) && String::from_utf8_lossy(&output.stdout).trim() == "enabled"
+            let state = String::from_utf8_lossy(&output.stdout);
+            match state.trim() {
+                "enabled" | "enabled-runtime" | "static" | "indirect" => true,
+                "disabled" | "disabled-runtime" | "masked" | "masked-runtime" => false,
+                _ => output.status == Some(0),
+            }
         });
     UnitState {
         active,

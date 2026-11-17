@@ -1,0 +1,15 @@
+device.mfr: NUT
+device.model: dummy-ups
+device.type: ups
+ups.mfr: NUT
+ups.model: dummy-ups
+ups.status: OB DISCHRG
+ups.delay.shutdown: 60
+ups.delay.start: 0
+ups.load: 35
+ups.test.result: OK
+battery.charge: 96
+battery.runtime: 5400
+battery.voltage: 23.4
+input.voltage: 0.0
+output.voltage: 120.0

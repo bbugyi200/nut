@@ -59,7 +59,7 @@ pub const CATALOG: &[CatalogEntry] = &[
         id: "hw.shutdown-return",
         section: Section::Hardware,
         title: "shutdown.return is advertised",
-        docs: "LIST CMD includes `shutdown.return` so the UPS can restore outlets after a clean halt.",
+        docs: "LIST CMD includes `shutdown.return` so the UPS can restore outlets after a clean halt. Skipped for dummy-ups, which does not advertise instant commands.",
         needs_root: false,
     },
     CatalogEntry {
@@ -115,7 +115,7 @@ pub const CATALOG: &[CatalogEntry] = &[
         id: "svc.enabled",
         section: Section::Services,
         title: "NUT units are enabled",
-        docs: "The driver, server, monitor, and `nut.target` are enabled.",
+        docs: "The driver, server, monitor, and `nut.target` are enabled (`enabled`, `enabled-runtime`, `static`, or `indirect`).",
         needs_root: false,
     },
     CatalogEntry {

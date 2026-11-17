@@ -18,8 +18,9 @@ to enforce this project's `clippy.toml`.
 - `just run *args` runs the crate's `nut` binary.
 - `just remote host *args` copies a release binary to `HOST` over SSH and runs a
   read-only command (`bios`, `bios guide`, `bios profile`, `config path/show/diff`,
-  `status`, `doctor`, and the other allowlisted verbs). It refuses `config new/render`,
-  `bios setup`, `bios attest`, drills, and other write/power actions.
+  `status`, `doctor`, `init --dry-run`, `rollback --list/--dry-run`, and the other
+  allowlisted verbs). It refuses `config new/render`, `bios setup`, `bios attest`,
+  drills, init apply, rollback restore, and other write/power actions.
 - `just docs-gen` regenerates `docs/doctor-checks.md` from the doctor registry.
   A drift test fails when the committed file does not match.
 - `just hook-shellcheck` runs ShellCheck on the golden `nut-upssched-cmd` when the tool is installed.
@@ -29,6 +30,14 @@ CI runs the same format/lint and test recipes on pushes to `main` and pull reque
 Actions are pinned by commit, permissions are read-only, and superseded runs are
 canceled. Tests never require UPS hardware, NUT services, privileges, or network
 access. Dependency acquisition and CI setup may require network access.
+
+A separate `e2e.yml` job on `ubuntu-24.04` installs NUT 2.8.1, fails if that
+version is unavailable, builds with `--locked`, installs the binary
+root-owned at `/usr/local/bin/nut`, and runs `just e2e` against a local
+dummy-ups `.dev` source. The harness proves hash-bound init, root `init --yes`,
+idempotent reruns, dummy OB/OL events, and rollback. Runner-only shutdown and
+sendmail stubs are installed before NUT starts. `just e2e-lint` validates those
+fixtures during `just check` without contacting a host or starting NUT.
 Host unit tests cover atomic replacement in a temporary directory under
 `target/` and prove fake timeouts, failure injection, and UPS scripting
 without contacting port 3493.
@@ -77,8 +86,22 @@ captures only the status fields shown by the CLI into a local JSON file. Set
 `NUT_CONFIG` to a local host TOML file to include its shutdown timer.
 
 SASE exposes `check` as `just check`, with declared gate inputs and toolchain
-fingerprints. After every push, watch the CI run for the exact pushed SHA through
-`/sase_monitor` before closing the phase.
+fingerprints. After every push, watch the CI and e2e runs for the exact pushed
+SHA through `/sase_monitor` before closing the phase.
+
+Read-only athena preview uses an explicit host and an explicit config path:
+
+```
+just remote athena --config PATH init --dry-run
+just remote athena --json --config PATH init --dry-run
+```
+
+Do not install production `/etc/nut-cli/nut.toml` just to obtain that evidence.
+A temporary redacted config may be staged for the preview and removed afterward.
+A non-root preview is partial when `/etc/nut` is unreadable: it names those
+files, intended operator and hook changes, and the required root preview. Root
+dry-run and apply on athena remain the adopt phase's responsibility. Recorded
+preview output lives in [athena preview](athena-preview.md).
 
 `just install-smoke` installs into a temporary root, checks every command help,
 and verifies both shell completion adapters. Bash and zsh are required; see

@@ -50,7 +50,7 @@ Needs root: no
 
 ### `hw.shutdown-return`
 
-LIST CMD includes `shutdown.return` so the UPS can restore outlets after a clean halt.
+LIST CMD includes `shutdown.return` so the UPS can restore outlets after a clean halt. Skipped for dummy-ups, which does not advertise instant commands.
 
 Needs root: no
 
@@ -100,7 +100,7 @@ Needs root: no
 
 ### `svc.enabled`
 
-The driver, server, monitor, and `nut.target` are enabled.
+The driver, server, monitor, and `nut.target` are enabled (`enabled`, `enabled-runtime`, `static`, or `indirect`).
 
 Needs root: no
 

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Disposable CI stub. Accepts mail on stdin and records the invocation.
+log=${NUT_E2E_MAIL_LOG:-/var/tmp/nut-e2e-sendmail.log}
+{
+    printf 'sendmail-stub invoked:'
+    for arg in "$@"; do
+        printf ' %s' "$arg"
+    done
+    printf '\n'
+    cat
+    printf '\n'
+} >>"$log"
+exit 0

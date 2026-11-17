@@ -1,0 +1,11 @@
+#!/bin/sh
+# Disposable CI stub. Never invoke a real shutdown helper.
+log=${NUT_E2E_SHUTDOWN_LOG:-/var/tmp/nut-e2e-shutdown.log}
+{
+    printf 'shutdown-stub invoked:'
+    for arg in "$@"; do
+        printf ' %s' "$arg"
+    done
+    printf '\n'
+} >>"$log"
+exit 0

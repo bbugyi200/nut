@@ -185,8 +185,6 @@ pub fn render_ups_conf(config: &ResolvedConfig) -> Result<String, RenderError> {
     let name = validate_ident("UPS name", &config.ups_name)?;
     let driver = validate_ident("driver", &config.driver.value)?;
     let port = validate_token("port", &config.port.value)?;
-    let vendorid = validate_ident("vendorid", &config.vendorid.value)?;
-    let productid = validate_ident("productid", &config.productid.value)?;
     let desc = validate_description(&config.description.value)?;
     let offdelay = config.offdelay.value.as_secs();
     let ondelay = config.ondelay.value.as_secs();
@@ -211,6 +209,8 @@ pub fn render_ups_conf(config: &ResolvedConfig) -> Result<String, RenderError> {
     }
     let mut stanza = format!("[{name}]\n    driver = {driver}\n    port = {port}\n");
     if config.driver.value != "dummy-ups" {
+        let vendorid = validate_ident("vendorid", &config.vendorid.value)?;
+        let productid = validate_ident("productid", &config.productid.value)?;
         stanza.push_str(&format!(
             "    vendorid = {vendorid}\n    productid = {productid}\n"
         ));
@@ -589,6 +589,19 @@ mod tests {
         )
         .unwrap();
         render(&resolved).unwrap()
+    }
+
+    #[test]
+    fn dummy_ups_conf_omits_usb_ids() {
+        let config = HostConfig::parse(include_str!("../tests/fixtures/e2e/host.toml")).unwrap();
+        let host = FakeHost::default();
+        let catalog = load_catalog(&host).unwrap();
+        let resolved = resolve(PathBuf::from("/e2e.toml"), &config, &catalog).unwrap();
+        let rendered = render_ups_conf(&resolved).unwrap();
+        assert!(rendered.contains("driver = dummy-ups"));
+        assert!(rendered.contains("port = /var/lib/nut/e2e.dev"));
+        assert!(!rendered.contains("vendorid"));
+        assert!(!rendered.contains("productid"));
     }
 
     #[test]
