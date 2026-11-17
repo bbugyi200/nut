@@ -574,6 +574,145 @@ pub fn checkpoint<H: Host>(
     save_pending(host, &pending)
 }
 
+/// Inspect a journaled operation while retaining the writer lock. Resource
+/// executors use this instead of reacquiring the process lock on retries.
+pub(crate) fn operation_record<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    id: &str,
+) -> Result<(OperationIntent, CheckpointState), TransactionError> {
+    require_root(host)?;
+    require_transaction_lock(transaction)?;
+    let pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    read_and_validate_manifest(host, &pending)?;
+    let op = pending
+        .operations
+        .iter()
+        .find(|op| op.id == id)
+        .ok_or(TransactionError::InvalidCheckpoint)?;
+    Ok((
+        OperationIntent {
+            id: op.id.clone(),
+            target: op.target.clone(),
+            before: op.before.clone(),
+            after: op.after.clone(),
+        },
+        op.checkpoint,
+    ))
+}
+
+pub(crate) fn require_membership_addition<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    user: &str,
+    group: &str,
+) -> Result<(), TransactionError> {
+    let pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    let (manifest, _) = read_and_validate_manifest(host, &pending)?;
+    if !manifest
+        .membership_additions
+        .iter()
+        .any(|a| a.user == user && a.group == group)
+    {
+        return Err(TransactionError::Invalid(
+            "membership addition is missing from backup",
+        ));
+    }
+    Ok(())
+}
+
+/// Read a validated original preimage. The returned bytes are deliberately
+/// not Debug/Serialize; package policy restoration must retain exact bytes.
+pub(crate) fn original_file<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    path: &Path,
+) -> Result<Option<(Vec<u8>, FileMetadata)>, TransactionError> {
+    require_root(host)?;
+    require_transaction_lock(transaction)?;
+    let pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    let (manifest, _) = read_and_validate_manifest(host, &pending)?;
+    match manifest
+        .files
+        .iter()
+        .find(|f| f.path() == path)
+        .ok_or(TransactionError::Invalid("resource is missing its backup"))?
+    {
+        ManifestFile::Absent { .. } => Ok(None),
+        ManifestFile::Present {
+            blob,
+            metadata,
+            byte_len,
+            sha256: expected,
+            ..
+        } => {
+            let blob_path = backup_dir(&transaction.stamp).join(blob);
+            verify_private_file(host, &blob_path)?;
+            let bytes = host
+                .read_protected(&blob_path)?
+                .ok_or(TransactionError::Invalid("backup blob missing"))?;
+            if bytes.len() != *byte_len || sha256(&bytes) != *expected {
+                return Err(TransactionError::Invalid("backup blob changed"));
+            }
+            Ok(Some((
+                bytes,
+                FileMetadata::file(metadata.uid, metadata.gid, metadata.mode),
+            )))
+        }
+    }
+}
+
+/// Bind a reserved resource once, after durable secret materialization or
+/// package creation of a group. The original backup remains immutable.
+/// Deferred resources are external operations: recovery must provide their
+/// observed fingerprints, just like account and package operations.
+pub(crate) fn bind_resource_operation<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    reserved: &OperationIntent,
+    bound: &OperationIntent,
+    targets: &[PathBuf],
+) -> Result<(), TransactionError> {
+    require_root(host)?;
+    require_transaction_lock(transaction)?;
+    validate_operation_id(&bound.id)?;
+    validate_fingerprint(&bound.before)?;
+    validate_fingerprint(&bound.after)?;
+    if bound.id != reserved.id || bound.target.is_some() || bound.before == bound.after {
+        return Err(TransactionError::Invalid("invalid resource binding"));
+    }
+    let mut pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    let (manifest, _) = read_and_validate_manifest(host, &pending)?;
+    for target in targets {
+        validate_target(target)?;
+        if !manifest.files.iter().any(|f| f.path() == target) {
+            return Err(TransactionError::Invalid("resource is missing its backup"));
+        }
+    }
+    let op = pending
+        .operations
+        .iter_mut()
+        .find(|op| op.id == bound.id)
+        .ok_or(TransactionError::InvalidCheckpoint)?;
+    if op.target == bound.target && op.before == bound.before && op.after == bound.after {
+        return Ok(());
+    }
+    if op.checkpoint != CheckpointState::Planned
+        || op.target != reserved.target
+        || op.before != reserved.before
+        || op.after != reserved.after
+    {
+        return Err(TransactionError::InvalidCheckpoint);
+    }
+    op.before.clone_from(&bound.before);
+    op.after.clone_from(&bound.after);
+    save_pending(host, &pending)
+}
+
 /// Generate a secret once, publish it privately, then bind its name, size,
 /// and hash into the pending journal. A retry reads the existing blob and
 /// does not draw more entropy.
@@ -1541,6 +1680,7 @@ const ALLOWED_TARGETS: &[&str] = &[
     OPERATOR_SECRET_PATH,
     FSTAB_PATH,
     STATE_PATH,
+    "/usr/sbin/policy-rc.d",
 ];
 
 fn validate_unit(unit: &str) -> Result<(), TransactionError> {

@@ -7,7 +7,6 @@
 //! diffs and non-secret evidence.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -171,7 +170,9 @@ fn file_fingerprint(state: &FileState) -> String {
         FileState::Absent => "absent".to_owned(),
         FileState::Unreadable => "unreadable".to_owned(),
         FileState::Unsafe { reason } => format!("unsafe:{reason}"),
-        FileState::Present { bytes, .. } => format!("sha256:{:x}", Sha256::digest(bytes)),
+        FileState::Present { bytes, metadata } => {
+            format!("sha256:{:x}:{metadata:?}", Sha256::digest(bytes))
+        }
     }
 }
 
@@ -444,7 +445,7 @@ pub fn plan(observation: &Observation, options: &PlanOptions) -> Plan {
                     // Credential-only or metadata-only differences still
                     // require a file change even when masked text matches.
                     credential_only_difference(path, &observation.credentials, options)
-                        || metadata_differs(path, metadata.as_ref())
+                        || metadata_differs(path, metadata.as_ref(), observation.groups.nut_gid)
                 }
             }
             Some(FileState::Unreadable) => {
@@ -464,19 +465,59 @@ pub fn plan(observation: &Observation, options: &PlanOptions) -> Plan {
         }
     }
 
-    // Config copy: when the selected host config is not the installed one,
-    // the validated source must be installed without secrets.
-    if let Some(config_path) = observation.config_path.as_ref()
-        && config_path.as_path() != PathBuf::from("/etc/nut-cli/nut.toml").as_path()
-    {
+    // Compare validated config semantics so a source/destination alias or
+    // formatting-only difference cannot force perpetual rewrites.
+    let config_matches = observation
+        .live_files
+        .get("/etc/nut-cli/nut.toml")
+        .is_some_and(|state| match state {
+            FileState::Present { bytes, metadata } => {
+                std::str::from_utf8(bytes)
+                    .ok()
+                    .and_then(|text| crate::config::HostConfig::parse(text).ok())
+                    .as_ref()
+                    == observation.config.as_ref()
+                    && metadata.as_ref() == Some(&crate::host::FileMetadata::file(0, 0, 0o644))
+            }
+            _ => false,
+        });
+    if !config_matches {
         steps.push(PlanStep {
-            id: "file:/etc/nut-cli/nut.toml".to_owned(),
+            id: "file:/etc/nut-cli/nut.toml".into(),
             kind: PlanStepKind::File,
-            summary: format!(
-                "install validated host config from {} (secrets masked)",
-                config_path.display()
-            ),
-            dependencies: Vec::new(),
+            summary: "install validated host config (secrets masked)".into(),
+            dependencies: vec![],
+        });
+    }
+    let secret_matches = match &creds.operator_secret {
+        FileState::Present { bytes, metadata } => {
+            let normalized = String::from_utf8_lossy(bytes);
+            normalized.ends_with('\n')
+                && normalized.trim_end_matches('\n').lines().count() == 1
+                && !options.rotate_secrets
+                && metadata.as_ref().is_some_and(|m| {
+                    m.uid == 0
+                        && m.mode == 0o640
+                        && m.is_file
+                        && Some(m.gid) == observation.groups.operators_gid
+                })
+        }
+        _ => false,
+    };
+    if !secret_matches {
+        steps.push(PlanStep {
+            id: "file:/etc/nut-cli/operator.secret".into(),
+            kind: PlanStepKind::File,
+            summary: "install protected operator credential (secret masked)".into(),
+            dependencies: vec![],
+        });
+    }
+    if observation.groups.operators_gid.is_none() {
+        steps.push(PlanStep {
+            id: "group:nut-operators".into(),
+            kind: PlanStepKind::Membership,
+            summary: "create the nut-operators system group".into(),
+            dependencies: vec![],
         });
     }
 
@@ -695,17 +736,22 @@ fn credential_only_difference(
     false
 }
 
-fn metadata_differs(path: &str, metadata: Option<&crate::host::FileMetadata>) -> bool {
+fn metadata_differs(
+    path: &str,
+    metadata: Option<&crate::host::FileMetadata>,
+    nut_gid: Option<u32>,
+) -> bool {
     let Some(meta) = metadata else {
         return true;
     };
     if path == LIVE_HOOK {
         return !(meta.uid == 0 && meta.gid == 0 && meta.mode == 0o755 && meta.is_file);
     }
-    // Five rendered configs are root:nut 0640. Gid for nut is unknown here;
-    // any non-root owner or wrong mode still forces a repair. Gid mismatches
-    // are handled by the transactions phase with the recorded nut gid.
-    !(meta.uid == 0 && meta.mode == 0o640 && meta.is_file)
+    !(meta.uid == 0
+        && meta.mode == 0o640
+        && meta.is_file
+        && !meta.is_dir
+        && Some(meta.gid) == nut_gid)
 }
 
 fn journal_members(observation: &Observation) -> BTreeSet<String> {
@@ -827,6 +873,21 @@ fn canonical_preimage(
     for (path, state) in &observation.live_files {
         out.push_str(&format!("target:{path}:{}\n", file_fingerprint(state)));
     }
+    out.push_str(&format!(
+        "config_source:{}\n",
+        file_fingerprint(&observation.config_source)
+    ));
+    out.push_str(&format!(
+        "legacy:{}\n",
+        file_fingerprint(&observation.legacy_hook)
+    ));
+    out.push_str(&format!(
+        "identities:{:?}:{:?}:{}:{}\n",
+        observation.groups.nut_gid,
+        observation.groups.operators_gid,
+        file_fingerprint(&observation.groups.group_file),
+        file_fingerprint(&observation.groups.passwd_file)
+    ));
     out.push_str(&format!("fstab:{}\n", file_fingerprint(&observation.fstab)));
     for package in REQUIRED_PACKAGES {
         let state = observation.packages.get(*package);
@@ -855,14 +916,16 @@ fn canonical_preimage(
         observation.groups.operators_members.join(",")
     ));
     out.push_str(&format!(
-        "usb:{}:{}:{}\n",
+        "usb:{}:{}:{}:{:?}:{:?}\n",
         observation
             .usb
             .selected
             .map(|id| id.to_string())
             .unwrap_or_default(),
         observation.usb.ambiguous,
-        observation.usb.skipped_dummy
+        observation.usb.skipped_dummy,
+        observation.usb.matching_sysfs,
+        observation.usb.node_gid
     ));
     out.push_str(&format!(
         "nut:{}\n",
@@ -1009,6 +1072,90 @@ mod tests {
                     stderr: Vec::new(),
                 },
             )
+    }
+
+    #[test]
+    fn config_alias_and_formatting_do_not_force_self_copy() {
+        let host = athena_host();
+        let mut observed = collect(&host, None, None);
+        observed.config_path = Some("/home/operator/nut.toml".into());
+        if let Some(FileState::Present { bytes, .. }) =
+            observed.live_files.get_mut("/etc/nut-cli/nut.toml")
+        {
+            bytes.extend_from_slice(b"\n# retained installed comment\n");
+        }
+        let planned = plan(&observed, &PlanOptions::default());
+        assert!(planned.complete);
+        assert!(
+            !planned
+                .steps
+                .iter()
+                .any(|step| step.id == "file:/etc/nut-cli/nut.toml")
+        );
+        observed.live_files.remove("/etc/nut-cli/nut.toml");
+        assert!(
+            plan(&observed, &PlanOptions::default())
+                .steps
+                .iter()
+                .any(|step| step.id == "file:/etc/nut-cli/nut.toml")
+        );
+    }
+
+    #[test]
+    fn group_drift_is_hashed_and_planned_even_when_bytes_match() {
+        let host = athena_host();
+        let mut observed = collect(&host, None, None);
+        let bytes = observed
+            .rendered
+            .as_ref()
+            .unwrap()
+            .nut_conf
+            .as_bytes()
+            .to_vec();
+        observed.live_files.insert(
+            LIVE_NUT_CONF.into(),
+            FileState::Present {
+                bytes,
+                metadata: Some(crate::host::FileMetadata::file(0, 100, 0o640)),
+            },
+        );
+        let correct = plan(&observed, &PlanOptions::default());
+        assert!(
+            !correct
+                .steps
+                .iter()
+                .any(|s| s.id == format!("file:{LIVE_NUT_CONF}"))
+        );
+        if let Some(FileState::Present {
+            metadata: Some(meta),
+            ..
+        }) = observed.live_files.get_mut(LIVE_NUT_CONF)
+        {
+            meta.gid = 99;
+        }
+        let drifted = plan(&observed, &PlanOptions::default());
+        assert_ne!(correct.hash, drifted.hash);
+        assert!(
+            drifted
+                .steps
+                .iter()
+                .any(|s| s.id == format!("file:{LIVE_NUT_CONF}"))
+        );
+    }
+
+    #[test]
+    fn operator_secret_and_missing_group_have_explicit_steps() {
+        let host = athena_host();
+        let mut observed = collect(&host, None, None);
+        observed.groups.operators_gid = None;
+        let planned = plan(&observed, &PlanOptions::default());
+        assert!(
+            planned
+                .steps
+                .iter()
+                .any(|s| s.id == "file:/etc/nut-cli/operator.secret")
+        );
+        assert!(planned.steps.iter().any(|s| s.id == "group:nut-operators"));
     }
 
     #[test]

@@ -56,6 +56,7 @@ without rewriting them. Empty plans return before taking the lock,
 creating directories, generating entropy, or writing backups or state. The
 transaction module has no command-line dispatch yet; later init/rollback phases
 compose these APIs with resource application and verification.
+See [init resource application](init-resources.md) for the executor contract.
 
 `just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
 then runs the real CLI against it. `just fake-upsd` serves the fixture for manual

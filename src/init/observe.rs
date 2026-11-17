@@ -147,6 +147,7 @@ pub struct CredentialObservation {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Observation {
     pub config_path: Option<PathBuf>,
+    pub config_source: FileState,
     pub config: Option<HostConfig>,
     pub config_error: Option<String>,
     pub resolved: Option<ResolvedConfig>,
@@ -370,14 +371,6 @@ fn parse_passwd_users(contents: &[u8]) -> BTreeSet<String> {
         .collect()
 }
 
-fn is_recognized_legacy_hook(bytes: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(bytes);
-    // The legacy athena hook is the only script eligible for automatic
-    // retirement: it carries the athena journal tag and the legacy test-path
-    // variable. Any other same-named script is left alone.
-    text.contains("athena-upssched") && text.contains("ATHENA_UPSSCHED_TEST_PATH")
-}
-
 /// Collect every input the planner needs. Never writes, never consumes
 /// entropy, never locks, never prompts.
 pub fn collect<H: Host>(
@@ -405,6 +398,11 @@ pub fn collect<H: Host>(
             (None, None, Some(message))
         }
     };
+
+    let config_source = config_path
+        .as_deref()
+        .map(|path| observe_file(host, path, false))
+        .unwrap_or_default();
 
     let catalog = load_catalog(host)
         .unwrap_or_else(|_| crate::profiles::embedded_catalog().expect("embedded catalog parses"));
@@ -436,6 +434,8 @@ pub fn collect<H: Host>(
         LIVE_UPSMON_CONF,
         LIVE_UPSSCHED_CONF,
         LIVE_HOOK,
+        "/etc/nut-cli/nut.toml",
+        OPERATOR_SECRET_PATH,
     ] {
         let state = observe_file(host, Path::new(path), true);
         if state == FileState::Unreadable {
@@ -446,9 +446,11 @@ pub fn collect<H: Host>(
 
     let fstab = observe_file(host, Path::new(FSTAB_PATH), false);
     let legacy_hook = observe_file(host, Path::new(LEGACY_HOOK), false);
-    let legacy_hook_recognized = legacy_hook
-        .present_bytes()
-        .is_some_and(is_recognized_legacy_hook);
+    let legacy_hook_recognized = legacy_hook.present_bytes().is_some_and(|old| {
+        rendered
+            .as_ref()
+            .is_some_and(|files| super::resources::recognized_legacy(old, files.hook.as_bytes()))
+    });
     let pending = observe_file(host, Path::new(PENDING_PATH), true);
     let state_file = observe_file(host, Path::new(STATE_PATH), true);
     if pending == FileState::Unreadable {
@@ -522,13 +524,21 @@ pub fn collect<H: Host>(
                     let mut matching = Vec::new();
                     for (sysfs, id) in found {
                         if id.vendor_hex() == wanted_vendor && id.product_hex() == wanted_product {
-                            matching.push(sysfs);
+                            let serial_matches = match resolved.ups.usb_match.serial.as_deref() {
+                                None => true,
+                                Some(wanted) => host
+                                    .read_file(&sysfs.join("serial"))
+                                    .ok()
+                                    .flatten()
+                                    .is_some_and(|bytes| {
+                                        String::from_utf8_lossy(&bytes).trim() == wanted
+                                    }),
+                            };
+                            if serial_matches {
+                                matching.push(sysfs);
+                            }
                         }
                     }
-                    // Serial pinning: when the host config pins a serial,
-                    // only devices with that serial select; without sysfs
-                    // serial files we keep the vendor/product match and let
-                    // the planner flag ambiguity only on multiples.
                     if matching.len() == 1 {
                         usb.selected = Some(UsbId {
                             vendor: u16::from_str_radix(&wanted_vendor, 16).unwrap_or(0),
@@ -541,9 +551,20 @@ pub fn collect<H: Host>(
                     }
                     // Node group for the selected device, when known.
                     if let Some(sysfs) = usb.matching_sysfs.first() {
-                        let node = sysfs.join("device");
-                        if let Ok(Some(meta)) = host.metadata(&node) {
-                            usb.node_gid = Some(meta.gid);
+                        let number = |name: &str| {
+                            host.read_file(&sysfs.join(name))
+                                .ok()
+                                .flatten()
+                                .and_then(|b| {
+                                    String::from_utf8_lossy(&b).trim().parse::<u16>().ok()
+                                })
+                                .filter(|n| (1..=999).contains(n))
+                        };
+                        if let (Some(bus), Some(device)) = (number("busnum"), number("devnum")) {
+                            let node = PathBuf::from(format!("/dev/bus/usb/{bus:03}/{device:03}"));
+                            if let Ok(Some(meta)) = host.metadata(&node) {
+                                usb.node_gid = Some(meta.gid);
+                            }
                         }
                     }
                 }
@@ -655,6 +676,7 @@ pub fn collect<H: Host>(
 
     Observation {
         config_path,
+        config_source,
         config,
         config_error,
         resolved,

@@ -24,7 +24,9 @@ pub(super) fn fail_next_rename() {
 }
 
 pub(super) fn read_protected(path: &Path) -> Result<Option<Vec<u8>>, HostError> {
-    let (dir, name) = open_parent(path)?;
+    let Some((dir, name)) = try_open_parent(path)? else {
+        return Ok(None);
+    };
     match inspect_target(&dir, &name, path, TargetKind::File)? {
         None => Ok(None),
         Some(_) => {
@@ -311,6 +313,13 @@ enum TargetKind {
 }
 
 fn open_parent(path: &Path) -> Result<(rustix::fd::OwnedFd, OsString), HostError> {
+    try_open_parent(path)?
+        .ok_or_else(|| HostError::unsafe_path(path, "parent directory is missing"))
+}
+
+// An absent ancestor means an absent file, after validating every existing
+// ancestor without following links. Reads must not create managed directories.
+fn try_open_parent(path: &Path) -> Result<Option<(rustix::fd::OwnedFd, OsString)>, HostError> {
     if !path.is_absolute() {
         return Err(HostError::unsafe_path(path, "path is not absolute"));
     }
@@ -332,8 +341,11 @@ fn open_parent(path: &Path) -> Result<(rustix::fd::OwnedFd, OsString), HostError
         match component {
             Component::RootDir => {}
             Component::Normal(name) => {
-                let st = rfs::statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW)
-                    .map_err(|error| map_errno("cannot stat ancestor", path, error))?;
+                let st = match rfs::statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW) {
+                    Ok(st) => st,
+                    Err(Errno::NOENT) => return Ok(None),
+                    Err(error) => return Err(map_errno("cannot stat ancestor", path, error)),
+                };
                 reject_special_or_link(&st, path, TargetKind::Dir)?;
                 reject_writable_mode(&st, path)?;
                 dir = rfs::openat(
@@ -353,7 +365,7 @@ fn open_parent(path: &Path) -> Result<(rustix::fd::OwnedFd, OsString), HostError
             }
         }
     }
-    Ok((dir, basename.to_os_string()))
+    Ok(Some((dir, basename.to_os_string())))
 }
 
 fn inspect_target(
@@ -438,6 +450,18 @@ mod tests {
             is_file: !dir,
             is_dir: dir,
         }
+    }
+
+    #[test]
+    fn protected_absence_below_missing_parent_does_not_create_directories() {
+        let dir = scratch();
+        let missing = dir.path().join("not-created/config");
+        assert_eq!(read_protected(&missing).unwrap(), None);
+        assert!(!dir.path().join("not-created").exists());
+        assert!(replace_file_atomic(&missing, b"content", &self_meta(0o600, false)).is_err());
+        let linked = dir.path().join("linked");
+        symlink(dir.path().join("not-created"), &linked).unwrap();
+        assert!(read_protected(&linked.join("config")).is_err());
     }
 
     #[test]

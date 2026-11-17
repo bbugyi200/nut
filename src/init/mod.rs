@@ -10,6 +10,7 @@
 mod hash;
 mod observe;
 mod plan;
+pub mod resources;
 mod secrets;
 mod transaction;
 

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add typed, journal-bound init resource application: simulated and version-pinned
+  missing-only package installs with NUT startup suppression, additive operator
+  groups, selected USB-node repair, atomic managed files, validated nofail edits,
+  and proven legacy-hook retirement. Interrupted operations reconcile their
+  actual state before retrying; package policies and file preimages survive
+  failure. Config aliases and formatting do not force repeated config copies;
+  ownership drift, operator credentials and group creation have explicit plans.
+
 - Add a durable init transaction store with private backup manifests and blobs,
   absent-target markers, shared writer locking, checkpoint reconciliation,
   one-time private secret materialization, and idempotent state finalization.
