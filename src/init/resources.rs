@@ -160,6 +160,55 @@ impl Resource {
         Self(Action::OperatorsGroup)
     }
 
+    /// Rebuild a package resource for crash recovery. Unlike
+    /// [`Resource::packages`], already installed packages are tolerated when
+    /// they match the requested versions; upgrades, removals, dependency
+    /// solution changes, and version drift still refuse exactly like the
+    /// apply path.
+    pub fn packages_resume(host: &impl Host, requested: &BTreeMap<String, String>) -> Result<Self> {
+        if requested.is_empty()
+            || requested
+                .keys()
+                .any(|p| !REQUIRED_PACKAGES.contains(&p.as_str()))
+        {
+            return Err(ResourceError::Refused("invalid requested package set"));
+        }
+        let mut solved = BTreeMap::new();
+        let mut missing = BTreeMap::new();
+        for (name, version) in requested {
+            validate_package(name, version)?;
+            match package_version(host, name)? {
+                None => {
+                    missing.insert(name.clone(), version.clone());
+                }
+                Some(installed) if installed == *version => {
+                    solved.insert(name.clone(), version.clone());
+                }
+                Some(_) => {
+                    return Err(ResourceError::Refused(
+                        "installed package differs from the bound version",
+                    ));
+                }
+            }
+        }
+        if !missing.is_empty() {
+            let simulated = simulate(host, &missing)?;
+            if simulated != missing {
+                return Err(ResourceError::Refused("apt dependency solution changed"));
+            }
+            solved.extend(missing);
+        }
+        Ok(Self(Action::Packages(solved)))
+    }
+
+    /// Current journal fingerprint for this resource as a bound external
+    /// operation observes it. Crash recovery uses this to reconcile journaled
+    /// operations without rebuilding secret-bearing desired payloads: file
+    /// observation reads only live disk state.
+    pub fn current_fingerprint(&self, host: &impl Host) -> Result<String> {
+        Ok(external_fingerprint(self, true, self.current(host)?))
+    }
+
     pub fn membership(user: &str, group: &str) -> Result<Self> {
         validate_user(user)?;
         if !matches!(group, "nut-operators" | "systemd-journal") {

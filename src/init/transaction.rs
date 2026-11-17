@@ -784,6 +784,35 @@ pub fn materialize_secret<H: Host>(
     Ok(SecretMaterial { bytes })
 }
 
+/// Read an already-materialized secret for this transaction without drawing
+/// entropy or writing anything. Returns `None` when the secret has not been
+/// materialized yet, so callers can fall back to adoption or generation.
+pub fn peek_secret<H: Host>(
+    host: &H,
+    transaction: &Transaction,
+    purpose: SecretPurpose,
+) -> Result<Option<Vec<u8>>, TransactionError> {
+    require_root(host)?;
+    require_transaction_lock(transaction)?;
+    let pending = load_pending(host)?;
+    ensure_transaction(&pending, transaction)?;
+    let Some(reference) = pending.secrets.get(&purpose) else {
+        return Ok(None);
+    };
+    if reference.file != purpose.file_name() || !(32..=128).contains(&reference.byte_len) {
+        return Err(TransactionError::Invalid("secret reference is malformed"));
+    }
+    let path = backup_dir(&transaction.stamp).join(&reference.file);
+    verify_private_file(host, &path)?;
+    let bytes = host
+        .read_protected(&path)?
+        .ok_or(TransactionError::Invalid("materialized secret is missing"))?;
+    if bytes.len() != reference.byte_len || sha256(&bytes) != reference.sha256 {
+        return Err(TransactionError::Invalid("materialized secret is corrupt"));
+    }
+    Ok(Some(bytes))
+}
+
 /// Validate the pending journal, the complete manifest, and all referenced
 /// blobs. Missing external-operation observations stay unknown; they are
 /// never treated as proof that an operation did not run.

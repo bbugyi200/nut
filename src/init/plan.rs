@@ -713,16 +713,15 @@ fn credential_only_difference(
     }
     if path == LIVE_UPSD_USERS {
         // Legacy grants must be repaired even when masked text matches.
+        // The count and set comparisons below detect missing, extra, or
+        // wrong grants; the masked text comparison that calls this function
+        // already detects the old comma-separated single-line format.
         if creds.operator_has_actions_set || creds.operator_has_all {
             return true;
         }
-        let joined = creds.operator_instcmds.join(", ");
         if !creds.operator_instcmds.is_empty()
             && creds.operator_instcmds.len() != OPERATOR_INSTCMDS.len()
         {
-            return true;
-        }
-        if joined.contains(',') {
             return true;
         }
         let mut have: Vec<String> = creds.operator_instcmds.clone();

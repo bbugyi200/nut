@@ -7,12 +7,15 @@
 //! injected [`Host`] boundary. `plan` is pure: the same inputs always produce
 //! the same ordered steps and the same authoritative hash.
 
+pub mod converge;
 mod hash;
 mod observe;
 mod plan;
 pub mod resources;
 mod secrets;
 mod transaction;
+
+pub use converge::{ConvergeError, ConvergeOptions, ConvergeReport, converge};
 
 pub use hash::plan_hash;
 pub use observe::{FileState, Observation, ObservationError, collect};
@@ -27,6 +30,6 @@ pub use transaction::{
     OperationRecovery, OutputRecord, ReconciledOperation, RecoveryReport, SecretMaterial,
     SecretPurpose, ServiceSnapshot, StateRecord, Transaction, TransactionError, TransactionOutcome,
     WriterLock, acquire_writer_lock, begin, begin_locked, checkpoint, file_fingerprint, finalize,
-    materialize_secret, predicted_file_fingerprint, recover, recover_locked,
+    materialize_secret, peek_secret, predicted_file_fingerprint, recover, recover_locked,
     recover_with_observations,
 };

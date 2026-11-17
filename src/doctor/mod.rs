@@ -271,6 +271,96 @@ fn exit_code(summary: &Summary, strict: bool) -> i32 {
     }
 }
 
+/// Options for the reusable structured doctor report. Observation sleeps stay
+/// opt-in: converge passes no observe duration and reuses the fast path.
+pub struct ReportOptions<'a> {
+    pub config_path: Option<&'a std::path::Path>,
+    pub ups: Option<&'a str>,
+    pub address: &'a str,
+    pub port: u16,
+}
+
+/// One failed verification item. `unavailable` marks required protection
+/// evidence that is missing (an unknown verdict on a required check) rather
+/// than an explicit failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DoctorFailure {
+    pub id: String,
+    pub title: String,
+    pub evidence: String,
+    pub fix: Option<String>,
+    pub unavailable: bool,
+}
+
+/// Structured doctor verdict for programmatic consumers such as init
+/// convergence. Uses normal non-strict semantics: warnings (BIOS, drill,
+/// charge, replace-battery) never fail verification.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DoctorReport {
+    pub passed: usize,
+    pub warnings: usize,
+    pub failed: usize,
+    pub unknown: usize,
+    pub skipped: usize,
+    pub failures: Vec<DoctorFailure>,
+}
+
+impl DoctorReport {
+    /// Whether post-apply verification accepts this report.
+    pub fn verified(&self) -> bool {
+        self.failures.is_empty()
+    }
+}
+
+/// Checks whose unknown verdict means required protection evidence is
+/// unavailable. An unknown here fails verification; every other unknown is
+/// reported in the counts but does not fail it.
+pub const REQUIRED_PROTECTION_CHECKS: &[&str] = &["hw.data", "hw.online"];
+
+/// Gather a snapshot and run every check without parsing terminal output.
+/// Never prompts, elevates, writes files, or sleeps unless the caller opts in
+/// through a future observe duration.
+pub fn report<H: Host>(host: &H, options: &ReportOptions<'_>) -> DoctorReport {
+    let snapshot = Snapshot::gather(
+        host,
+        GatherOptions {
+            config_path: options.config_path,
+            observe: None,
+            ups: options.ups,
+            address: options.address,
+            port: options.port,
+        },
+    );
+    let checks = run_checks(host, &snapshot, &[]);
+    let summary = summarize(&checks);
+    let mut failures = Vec::new();
+    for check in &checks {
+        let required_unknown = check.status == Status::Unknown
+            && REQUIRED_PROTECTION_CHECKS.contains(&check.id.as_str());
+        if check.status == Status::Fail || required_unknown {
+            failures.push(DoctorFailure {
+                id: check.id.clone(),
+                title: catalog()
+                    .iter()
+                    .find(|entry| entry.id == check.id)
+                    .map(|entry| entry.title.to_owned())
+                    .unwrap_or_else(|| check.id.clone()),
+                evidence: check.evidence.clone(),
+                fix: check.fix.clone(),
+                unavailable: required_unknown,
+            });
+        }
+    }
+    DoctorReport {
+        passed: summary.passed,
+        warnings: summary.warnings,
+        failed: summary.failed,
+        unknown: summary.unknown,
+        skipped: summary.skipped,
+        failures,
+    }
+}
+
 fn write_error(error: impl std::fmt::Display) -> NutError {
     NutError::operational(format!("cannot write doctor output: {error}"))
 }

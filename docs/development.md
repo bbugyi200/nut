@@ -54,9 +54,11 @@ record is removed. If interrupted after writing state but before recording
 publication, recovery compares the state bytes with the intent and resumes
 without rewriting them. Empty plans return before taking the lock,
 creating directories, generating entropy, or writing backups or state. The
-transaction module has no command-line dispatch yet; later init/rollback phases
-compose these APIs with resource application and verification.
-See [init resource application](init-resources.md) for the executor contract.
+transaction module has no command-line dispatch yet; `init::converge`
+already composes it with resource application, service effects, and
+verification, and later init/rollback phases add the CLI and restoration.
+See [init resource application](init-resources.md) for the executor contract
+and [init convergence](init-converge.md) for the coordinator contract.
 
 `just demo` starts `nut-fake-ups-d` on loopback with the checked-in sample fixture,
 then runs the real CLI against it. `just fake-upsd` serves the fixture for manual

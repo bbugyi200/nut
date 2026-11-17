@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add safe init convergence orchestration: root/applicability/reviewed-hash
+  validation under the shared writer lock, coordinated transaction and
+  resource operations, service dependency effects in driver/server/monitor
+  order with fresh safe-online gates, a fast structured doctor pass that never
+  parses terminal output, failed-verification compensation from recorded
+  preimages with the exact `nut rollback <stamp>` hint, and idempotent state
+  finalization. A second identical init reports zero changes; restarts always
+  execute so units pick up new configuration, and already-satisfied enables
+  stay no-ops. Adopted credentials are retained byte-for-byte while legacy
+  operator grants are repaired; rotation regenerates the pair once per
+  transaction and retries reuse the same secrets. Correct multi-directive
+  operator grants no longer force a perpetual upsd.users rewrite.
+
 - Add typed, journal-bound init resource application: simulated and version-pinned
   missing-only package installs with NUT startup suppression, additive operator
   groups, selected USB-node repair, atomic managed files, validated nofail edits,
