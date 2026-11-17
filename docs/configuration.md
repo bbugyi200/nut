@@ -84,7 +84,10 @@ unless that access is required.
 
 The dummy UPS profile resolves without USB IDs. Point `port` at a local `.dev`
 file for isolated NUT 2.8.1 CI; dummy-ups never uses USB passthrough or
-repeater mode. See [development](development.md).
+repeater mode. Its rendered `ups.conf` stanza omits `offdelay`/`ondelay`,
+which dummy-ups rejects at startup; the `.dev` file publishes
+`ups.delay.shutdown`/`ups.delay.start` for the `hw.delays` check instead. See
+[development](development.md).
 
 Embedded UPS profiles live in `profiles/ups/`. Host-local overrides may be dropped in
 `/etc/nut-cli/ups/*.toml` and `/etc/nut-cli/boards/*.toml` without rebuilding nut.

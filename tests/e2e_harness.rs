@@ -27,6 +27,8 @@ fn dummy_host_fixture_resolves_and_renders_without_usb() {
     assert!(rendered.contains("port = /var/lib/nut/e2e.dev"));
     assert!(!rendered.contains("vendorid"));
     assert!(!rendered.contains("productid"));
+    assert!(!rendered.contains("offdelay"), "dummy-ups rejects offdelay");
+    assert!(!rendered.contains("ondelay"), "dummy-ups rejects ondelay");
 }
 
 #[test]

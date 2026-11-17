@@ -11,6 +11,13 @@
   pass `findmnt --verify` before init verification, keep `findmnt` output in
   failure diagnostics, and stop the `MONITOR` redaction from mangling doctor
   prose.
+- Start dummy-ups for real: its rendered `ups.conf` stanza no longer carries
+  `offdelay`/`ondelay`, which NUT 2.8.1 dummy-ups rejects as invalid driver
+  variables. Give init a bounded settle window (about 15 s) for Ubuntu's
+  `Type=simple` upsd and upsmon units: the monitor's fresh safe-online gate
+  re-observes unavailable or stale readings, and post-apply verification
+  repeats while its only failures are readiness gaps. Explicit OB, LB, or FSD
+  readings and every other failure still refuse immediately.
 - Keep drill records inside the protected init state tree: `nut drill` now
   publishes records atomically as `root:root` 0600 files under the 0700
   `/var/lib/nut-cli/drills`, and non-root `nut doctor` skips the root-only

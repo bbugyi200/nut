@@ -208,16 +208,23 @@ pub fn render_ups_conf(config: &ResolvedConfig) -> Result<String, RenderError> {
         global.push_str(&format!("retrydelay = {value}\n"));
     }
     let mut stanza = format!("[{name}]\n    driver = {driver}\n    port = {port}\n");
-    if config.driver.value != "dummy-ups" {
+    let dummy = config.driver.value == "dummy-ups";
+    if !dummy {
         let vendorid = validate_ident("vendorid", &config.vendorid.value)?;
         let productid = validate_ident("productid", &config.productid.value)?;
         stanza.push_str(&format!(
             "    vendorid = {vendorid}\n    productid = {productid}\n"
         ));
     }
-    stanza.push_str(&format!(
-        "    desc = \"{desc}\"\n    offdelay = {offdelay}\n    ondelay = {ondelay}\n"
-    ));
+    stanza.push_str(&format!("    desc = \"{desc}\"\n"));
+    // offdelay/ondelay are hardware driver variables. dummy-ups rejects them
+    // at startup ("'offdelay' is not a valid variable name for this driver");
+    // its delays come from the ups.delay.* values in the device file.
+    if !dummy {
+        stanza.push_str(&format!(
+            "    offdelay = {offdelay}\n    ondelay = {ondelay}\n"
+        ));
+    }
     for (key, value) in &config.extra {
         if key == "maxretry" || key == "retrydelay" {
             continue;
@@ -602,6 +609,9 @@ mod tests {
         assert!(rendered.contains("port = /var/lib/nut/e2e.dev"));
         assert!(!rendered.contains("vendorid"));
         assert!(!rendered.contains("productid"));
+        // NUT 2.8.1 dummy-ups exits on unknown driver variables.
+        assert!(!rendered.contains("offdelay"));
+        assert!(!rendered.contains("ondelay"));
     }
 
     #[test]

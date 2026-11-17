@@ -47,6 +47,23 @@ const UPSD_PORT: u16 = 3493;
 const SHORT_TIMEOUT: Duration = Duration::from_secs(10);
 const SYSTEMCTL_TIMEOUT: Duration = Duration::from_secs(60);
 const SECRET_ENTROPY_BYTES: usize = 32;
+/// Ubuntu's NUT 2.8.1 runs `upsd -F` and `upsmon -F` as `Type=simple`
+/// units, so `systemctl start|restart` returns before upsd listens or upsmon
+/// logs in. Readiness gaps get this bounded settle window (about 15 s);
+/// explicit unsafe evidence never waits, and the final verdict is unchanged.
+const SETTLE_ATTEMPTS: u32 = 30;
+const SETTLE_INTERVAL: Duration = Duration::from_millis(500);
+/// Doctor checks that only mean "a just-started unit is not ready yet".
+/// `hw.online` joins them only when `hw.data` also failed (no reading at all);
+/// an explicit OB/LB/FSD reading with data present never waits.
+const SETTLING_CHECKS: &[&str] = &[
+    "svc.driver",
+    "svc.server",
+    "svc.monitor",
+    "svc.listen",
+    "svc.client",
+    "hw.data",
+];
 
 /// Recognized `systemctl is-enabled` states, matching the transaction manifest
 /// validator. Anything else fails closed.
@@ -326,9 +343,44 @@ fn require_observation_safe(ups: &UpsEvidence) -> Result<(), ConvergeError> {
 
 /// Fresh safe-online check against the live UPS, used immediately before
 /// disruptive service effects so a loss of OL between steps stops the apply.
+/// Unavailable evidence (upsd not listening yet, stale or unconnected driver
+/// data) is re-observed within the bounded settle window because the server
+/// may have just been started; an explicit unsafe status refuses at once.
 fn require_fresh_safe_online<H: Host>(host: &H, ups_name: &str) -> Result<(), ConvergeError> {
-    let observed = host.observe_ups(UPSD_ADDRESS, UPSD_PORT, ups_name);
-    require_safe_online(&observed.vars, &observed.vars_error)
+    let mut attempt = 1;
+    loop {
+        let observed = host.observe_ups(UPSD_ADDRESS, UPSD_PORT, ups_name);
+        let result = require_safe_online(&observed.vars, &observed.vars_error);
+        if result.is_err() && evidence_unavailable(&observed) && attempt < SETTLE_ATTEMPTS {
+            host.sleep(SETTLE_INTERVAL);
+            attempt += 1;
+            continue;
+        }
+        return result;
+    }
+}
+
+/// Whether a UPS reading carries no status evidence at all, as opposed to an
+/// explicit (possibly unsafe) status.
+fn evidence_unavailable(observed: &crate::host::UpsObservation) -> bool {
+    observed.vars_error.is_some()
+        || observed
+            .vars
+            .get("ups.status")
+            .is_none_or(|status| status.trim().is_empty())
+}
+
+/// Whether every verification failure is a readiness gap of a just-started
+/// unit rather than evidence of an unsafe or misconfigured host.
+fn only_settling_failures(doctor: &DoctorReport) -> bool {
+    let no_data = doctor
+        .failures
+        .iter()
+        .any(|failure| failure.id == "hw.data");
+    !doctor.failures.is_empty()
+        && doctor.failures.iter().all(|failure| {
+            SETTLING_CHECKS.contains(&failure.id.as_str()) || (no_data && failure.id == "hw.online")
+        })
 }
 
 fn systemctl<H: Host>(
@@ -1580,19 +1632,31 @@ fn finish<H: Host>(
     // this verification succeeds, so those two post-init checks are not
     // applicable at this boundary. All checks run normally for later doctor
     // invocations and for no-op init plans.
-    let doctor = report_excluding(
-        host,
-        &ReportOptions {
-            config_path: observation.config_path.as_deref(),
-            ups: observation
-                .resolved
-                .as_ref()
-                .map(|resolved| resolved.ups_name.as_str()),
-            address: UPSD_ADDRESS,
-            port: UPSD_PORT,
-        },
-        &["state.drift", "state.backup"],
-    );
+    let verify_applied = || {
+        report_excluding(
+            host,
+            &ReportOptions {
+                config_path: observation.config_path.as_deref(),
+                ups: observation
+                    .resolved
+                    .as_ref()
+                    .map(|resolved| resolved.ups_name.as_str()),
+                address: UPSD_ADDRESS,
+                port: UPSD_PORT,
+            },
+            &["state.drift", "state.backup"],
+        )
+    };
+    let mut doctor = verify_applied();
+    // A just-started Type=simple upsd/upsmon may not be listening or logged
+    // in yet. Re-verify within the settle window only while every failure is
+    // such a readiness gap; any other failure compensates immediately.
+    let mut attempt = 1;
+    while attempt < SETTLE_ATTEMPTS && only_settling_failures(&doctor) {
+        host.sleep(SETTLE_INTERVAL);
+        doctor = verify_applied();
+        attempt += 1;
+    }
     if !doctor.verified() {
         let problems = compensate(
             host,
@@ -2505,6 +2569,96 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+        // An explicit on-battery reading is not a readiness gap: no settle wait.
+        assert!(host.slept().is_zero());
+    }
+
+    fn upsd_not_listening() -> UpsObservation {
+        UpsObservation::unavailable(
+            "cannot connect to upsd at 127.0.0.1:3493: Connection refused (os error 111)",
+        )
+    }
+
+    #[test]
+    fn monitor_gate_waits_for_a_just_started_upsd() {
+        // Type=simple upsd: the monitor gate first finds nothing listening,
+        // then the fresh OL reading; verification follows.
+        let host = with_observations(fixture_host(), 5, ol())
+            .with_ups_observation(upsd_not_listening())
+            .with_ups_observation(upsd_not_listening());
+        let host = with_observations(host, 2, ol());
+        let hash = expect_plan(&host, false);
+        let report = converge(&host, &options(hash, false)).expect("converges after settle");
+        assert!(report.state_finalized);
+        assert_eq!(host.slept(), SETTLE_INTERVAL * 2);
+    }
+
+    #[test]
+    fn monitor_gate_refuses_when_upsd_never_answers() {
+        let host = with_observations(fixture_host(), 5, ol());
+        let hash = expect_plan(&host, false);
+        let error = converge(&host, &options(hash, false)).unwrap_err();
+        assert!(
+            matches!(error, ConvergeError::UnsafeUps(_)),
+            "unexpected error: {error:?}"
+        );
+        assert_eq!(host.slept(), SETTLE_INTERVAL * (SETTLE_ATTEMPTS - 1));
+        assert!(!has_effect(&host.effects(), |effect| matches!(
+            effect,
+            HostEffect::Run { program, args }
+                if program == "systemctl"
+                    && args.len() == 2
+                    && args[1] == "nut-monitor.service"
+                    && ["start", "restart"].iter().any(|verb| &args[0] == verb)
+        )));
+    }
+
+    #[test]
+    fn verification_waits_for_monitor_login() {
+        // Type=simple upsmon: the first verification pass sees no logged-in
+        // client; the next pass sees the login and finalizes state.
+        let mut no_login = ol();
+        no_login.clients.clear();
+        let host = with_observations(fixture_host(), 6, ol())
+            .with_ups_observation(no_login)
+            .with_ups_observation(ol());
+        let hash = expect_plan(&host, false);
+        let report = converge(&host, &options(hash, false)).expect("verifies after login");
+        assert!(report.state_finalized);
+        assert_eq!(host.slept(), SETTLE_INTERVAL);
+        assert!(
+            host.read_protected(std::path::Path::new(super::super::observe::STATE_PATH))
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn settling_failures_exclude_unsafe_evidence() {
+        let failure = |id: &str| crate::doctor::DoctorFailure {
+            id: id.into(),
+            title: id.into(),
+            evidence: String::new(),
+            fix: None,
+            unavailable: false,
+        };
+        let report = |ids: &[&str]| DoctorReport {
+            failures: ids.iter().map(|id| failure(id)).collect(),
+            ..DoctorReport::default()
+        };
+        assert!(!only_settling_failures(&report(&[])));
+        assert!(only_settling_failures(&report(&["svc.client"])));
+        assert!(only_settling_failures(&report(&[
+            "hw.data",
+            "hw.online",
+            "svc.listen"
+        ])));
+        // OB with data present, or a config/permission failure, never waits.
+        assert!(!only_settling_failures(&report(&["hw.online"])));
+        assert!(!only_settling_failures(&report(&[
+            "svc.client",
+            "root.perms"
+        ])));
     }
 
     #[test]

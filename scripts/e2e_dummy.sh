@@ -370,13 +370,18 @@ install_nut_packages() {
 install_dummy_source() {
     install -d -o nut -g nut -m 0750 /var/lib/nut
     install -o nut -g nut -m 0664 "$DEV_OL" "$DEV_LIVE"
-    # Confine listen addresses in this disposable runner. Init does not manage upsd.conf.
-    cat >/etc/nut/upsd.conf <<'EOF'
-LISTEN 127.0.0.1 3493
-LISTEN ::1 3493
-EOF
+    # Confine listen addresses in this disposable runner. Init does not manage
+    # upsd.conf. Only list ::1 when the runner's loopback has it, so upsd never
+    # depends on an address this VM cannot bind.
+    {
+        echo "LISTEN 127.0.0.1 3493"
+        if ip -6 addr show dev lo 2>/dev/null | grep -q 'inet6 ::1/'; then
+            echo "LISTEN ::1 3493"
+        fi
+    } >/etc/nut/upsd.conf
     chown root:nut /etc/nut/upsd.conf
     chmod 0640 /etc/nut/upsd.conf
+    log "upsd listeners: $(awk '{print $2}' /etc/nut/upsd.conf | paste -sd' ')"
 }
 
 install_cli() {
